@@ -1,0 +1,170 @@
+"""Watches Kubernetes resources (nodes, pods, deployments, events) via the
+Watch API and feeds slim, JSON-friendly objects into the ClusterState.
+
+Runs in-cluster (ServiceAccount) or against a local kubeconfig.
+Each watch runs in its own task and reconnects with backoff -- resource
+version expiry (410 Gone) simply triggers a fresh list+watch.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+
+from ..state import ClusterState
+
+log = logging.getLogger("piwatch.k8s")
+
+
+async def load_config():
+    from kubernetes_asyncio import config
+
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):
+        config.load_incluster_config()
+        log.info("Kubernetes: in-cluster config loaded")
+    else:
+        await config.load_kube_config()
+        log.info("Kubernetes: kubeconfig loaded")
+
+
+# ---------------- mappers: k8s object -> slim dict ----------------
+
+def map_node(n) -> dict:
+    conditions = {c.type: c.status for c in (n.status.conditions or [])}
+    labels = n.metadata.labels or {}
+    roles = [
+        k.split("/", 1)[1]
+        for k in labels
+        if k.startswith("node-role.kubernetes.io/")
+    ] or ["worker"]
+    addrs = {a.type: a.address for a in (n.status.addresses or [])}
+    return {
+        "name": n.metadata.name,
+        "ready": conditions.get("Ready") == "True",
+        "conditions": conditions,
+        "roles": roles,
+        "arch": (n.status.node_info.architecture if n.status.node_info else None),
+        "kubelet": (n.status.node_info.kubelet_version if n.status.node_info else None),
+        "os_image": (n.status.node_info.os_image if n.status.node_info else None),
+        "internal_ip": addrs.get("InternalIP"),
+        "cpu_capacity": (n.status.capacity or {}).get("cpu"),
+        "mem_capacity": (n.status.capacity or {}).get("memory"),
+        "unschedulable": bool(n.spec.unschedulable),
+        "created": n.metadata.creation_timestamp.timestamp() if n.metadata.creation_timestamp else None,
+    }
+
+
+def map_pod(p) -> dict:
+    statuses = p.status.container_statuses or []
+    restarts = sum(s.restart_count for s in statuses)
+    ready = sum(1 for s in statuses if s.ready)
+    waiting_reason = None
+    for s in statuses:
+        if s.state and s.state.waiting:
+            waiting_reason = s.state.waiting.reason
+    return {
+        "key": f"{p.metadata.namespace}/{p.metadata.name}",
+        "name": p.metadata.name,
+        "namespace": p.metadata.namespace,
+        "node": p.spec.node_name,
+        "phase": p.status.phase,
+        "reason": waiting_reason or p.status.reason,
+        "ready": f"{ready}/{len(statuses)}" if statuses else "0/0",
+        "restarts": restarts,
+        "containers": [c.name for c in (p.spec.containers or [])],
+        "created": p.metadata.creation_timestamp.timestamp() if p.metadata.creation_timestamp else None,
+    }
+
+
+def map_deployment(d) -> dict:
+    return {
+        "key": f"{d.metadata.namespace}/{d.metadata.name}",
+        "name": d.metadata.name,
+        "namespace": d.metadata.namespace,
+        "replicas": d.spec.replicas or 0,
+        "ready": d.status.ready_replicas or 0,
+        "available": d.status.available_replicas or 0,
+        "updated": d.status.updated_replicas or 0,
+        "images": [c.image for c in d.spec.template.spec.containers],
+    }
+
+
+def map_event(e) -> dict:
+    ts = e.last_timestamp or e.event_time or e.metadata.creation_timestamp
+    return {
+        "uid": e.metadata.uid,
+        "type": e.type,
+        "reason": e.reason,
+        "message": e.message,
+        "object": f"{e.involved_object.kind}/{e.involved_object.name}",
+        "namespace": e.involved_object.namespace,
+        "count": e.count or 1,
+        "t": ts.timestamp() if ts else None,
+    }
+
+
+# ---------------- watch loops ----------------
+
+async def _watch_loop(state: ClusterState, kind: str):
+    """Generic list+watch loop with reconnect/backoff for one resource kind."""
+    from kubernetes_asyncio import client, watch
+
+    backoff = 1
+    while True:
+        try:
+            async with client.ApiClient() as api_client:
+                v1 = client.CoreV1Api(api_client)
+                apps = client.AppsV1Api(api_client)
+
+                if kind == "nodes":
+                    lister, mapper = v1.list_node, map_node
+                elif kind == "pods":
+                    lister, mapper = v1.list_pod_for_all_namespaces, map_pod
+                elif kind == "deployments":
+                    lister, mapper = apps.list_deployment_for_all_namespaces, map_deployment
+                elif kind == "events":
+                    lister, mapper = v1.list_event_for_all_namespaces, map_event
+                else:
+                    raise ValueError(kind)
+
+                # Initial list -> seed state
+                initial = await lister()
+                rv = initial.metadata.resource_version
+                for item in initial.items:
+                    _apply(state, kind, "ADDED", mapper(item))
+                backoff = 1
+
+                # Watch for deltas
+                w = watch.Watch()
+                async with w.stream(lister, resource_version=rv, timeout_seconds=300) as stream:
+                    async for event in stream:
+                        _apply(state, kind, event["type"], mapper(event["object"]))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # 410 Gone, network blips, apiserver restart
+            log.warning("Watch %s aborted (%s) -- reconnecting in %ss", kind, exc, backoff)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30)
+
+
+def _apply(state: ClusterState, kind: str, ev_type: str, obj: dict) -> None:
+    deleted = ev_type == "DELETED"
+    if kind == "nodes":
+        state.remove_node(obj["name"]) if deleted else state.upsert_node(obj["name"], obj)
+    elif kind == "pods":
+        state.remove_pod(obj["key"]) if deleted else state.upsert_pod(obj["key"], obj)
+    elif kind == "deployments":
+        state.remove_deployment(obj["key"]) if deleted else state.upsert_deployment(obj["key"], obj)
+    elif kind == "events" and not deleted:
+        state.add_event(obj)
+
+
+async def run(state: ClusterState):
+    """Entry point: start all watch loops (called from main.py lifespan)."""
+    await load_config()
+    await asyncio.gather(
+        _watch_loop(state, "nodes"),
+        _watch_loop(state, "pods"),
+        _watch_loop(state, "deployments"),
+        _watch_loop(state, "events"),
+    )

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: piwatch
+  namespace: monitoring
+spec:
+  selector: { app: piwatch }
+  ports:
+    - { name: http, port: 80, targetPort: 8000 }
+---
+# Headless service: DNS returns the IPs of all node-agent pods,
+# which is how the backend discovers the agents (hardware.py).
+apiVersion: v1
+kind: Service
+metadata:
+  name: piwatch-node-agent
+  namespace: monitoring
+spec:
+  clusterIP: None
+  selector: { app: piwatch-node-agent }
+  ports:
+    - { name: http, port: 9101, targetPort: 9101 }

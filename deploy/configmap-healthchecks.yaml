@@ -1,0 +1,12 @@
+# Left empty on purpose: if you already run a dedicated uptime-monitoring tool (e.g. Uptime
+# Kuma) for HTTP/TCP healthchecks, there's no need to duplicate that here. PiWatch's real
+# value-add is the Kubernetes-native live view (nodes/pods/deployments/events, live logs) +
+# Pi hardware metrics. Add checks below if/when you want them; see README.md for the format.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: piwatch-healthchecks
+  namespace: monitoring
+data:
+  healthchecks.yaml: |
+    checks: []

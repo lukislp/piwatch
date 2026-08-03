@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - configmap-healthchecks.yaml
+  - deployment.yaml
+  - daemonset-node-agent.yaml
+  - service.yaml
+  # ingress-nginx retired in favor of NGINX Gateway Fabric - routing now goes through
+  # httproute.yaml only.
+  - httproute.yaml
+  - pdb.yaml
+  # SealedSecret instead of a plaintext Secret - SAFE to commit to Git, only the
+  # sealed-secrets controller in the cluster (kube-system) can decrypt it. Generated from the
+  # existing Secret (created via create-secret.ps1) with:
+  #   kubectl get secret piwatch -n monitoring -o yaml | kubeseal --format yaml --cert <pub-cert.pem> > sealed-secrets/piwatch.yaml
+  # Replaces the old "- secret.yaml" approach (secret.example.yaml -> secret.yaml would have
+  # been plaintext on disk, so it was never recommended and is now fully obsolete).
+  - sealed-secrets/piwatch.yaml

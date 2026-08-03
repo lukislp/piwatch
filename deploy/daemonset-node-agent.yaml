@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: piwatch-node-agent
+  namespace: monitoring
+  labels: { app: piwatch-node-agent }
+spec:
+  selector:
+    matchLabels: { app: piwatch-node-agent }
+  template:
+    metadata:
+      labels: { app: piwatch-node-agent }
+    spec:
+      # The node-agent makes no Kubernetes API calls (it only reads hostPath sysfs/procfs),
+      # unlike the piwatch Deployment itself (ClusterRole for the watch API, see rbac.yaml).
+      automountServiceAccountToken: false
+      tolerations:
+        # also run on the control-plane Pi
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+      containers:
+        - name: agent
+          image: registry.example.com/your-namespace/piwatch:latest
+          command: ["uvicorn", "app.node_agent:app", "--host", "0.0.0.0", "--port", "9101"]
+          # allowPrivilegeEscalation: false is safe regardless of root/non-root status. NO
+          # capabilities drop here (unlike the piwatch Deployment): this container reads
+          # /host/proc, /host/sys, /host/root as root WITHOUT its own USER directive in the
+          # image - without CAP_DAC_OVERRIDE, root would go through the same file permission
+          # checks as a regular user, which could cause new read gaps on individual
+          # non-world-readable /proc paths (e.g. other UIDs) - not verifiable live without
+          # production risk, so only the risk-free half of the hardening was applied here.
+          securityContext:
+            allowPrivilegeEscalation: false
+          ports:
+            - containerPort: 9101
+          env:
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - { name: PIWATCH_SYS, value: /host/sys }
+            - { name: PIWATCH_PROC, value: /host/proc }
+            - { name: PIWATCH_DISK_PATH, value: /host/root }
+          volumeMounts:
+            - { name: sys, mountPath: /host/sys, readOnly: true }
+            - { name: proc, mountPath: /host/proc, readOnly: true }
+            - { name: root, mountPath: /host/root, readOnly: true }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9101 }
+            periodSeconds: 30
+      volumes:
+        - { name: sys, hostPath: { path: /sys } }
+        - { name: proc, hostPath: { path: /proc } }
+        - { name: root, hostPath: { path: / } }

@@ -1,0 +1,47 @@
+# Gateway API route, served through NGINX Gateway Fabric (Gateway "home-gateway" - see your
+# cluster's gateway manifest for the piwatch listener and its TLS secret reference). If you're
+# migrating from ingress-nginx, keep the old Ingress object around until the reverse proxy in
+# front of the cluster has been repointed at the new Gateway IP.
+#
+# WebSockets (/ws): unlike ingress-nginx, upgrade support isn't guaranteed with NGF - verify
+# explicitly against the Gateway IP after each deploy (curl --http1.1 with upgrade headers,
+# expect "101 Switching Protocols").
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: piwatch
+  namespace: monitoring
+spec:
+  parentRefs:
+    - name: home-gateway
+      namespace: nginx-gateway
+  hostnames:
+    - piwatch.home.lan
+    - piwatch.example.com
+  rules:
+    - backendRefs:
+        - name: piwatch
+          port: 80
+---
+# Same rate limit as the previous ingress-nginx annotations (limit-rps=20,
+# burst-multiplier=10, rejected with 503); noDelay = ingress-nginx's "nodelay" behavior.
+# Only applies to new HTTP requests, not already-open /ws WebSocket connections.
+apiVersion: gateway.nginx.org/v1alpha1
+kind: RateLimitPolicy
+metadata:
+  name: piwatch-rate-limit
+  namespace: monitoring
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: piwatch
+  rateLimit:
+    local:
+      rules:
+        - zoneSize: 10m
+          key: "$binary_remote_addr"
+          rate: 20r/s
+          burst: 200
+          noDelay: true
+    rejectCode: 503

@@ -1,0 +1,10 @@
+# During maintenance (kubectl drain), at least 1 replica always stays available.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: piwatch
+  namespace: monitoring
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: piwatch }

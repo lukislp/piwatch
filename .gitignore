@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 .ruff_cache/
 deploy/secret.yaml
+CLAUDE.md

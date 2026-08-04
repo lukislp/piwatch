@@ -71,7 +71,7 @@ async def _run_http(check: dict, client: httpx.AsyncClient) -> tuple[bool, float
 async def _run_tcp(check: dict) -> tuple[bool, float | None, str]:
     start = time.perf_counter()
     try:
-        reader, writer = await asyncio.wait_for(
+        _reader, writer = await asyncio.wait_for(
             asyncio.open_connection(check["host"], check["port"]),
             timeout=check.get("timeout", 5),
         )

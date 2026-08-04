@@ -1,0 +1,7 @@
+[tool.ruff.lint]
+# BLE001 (no blind `except Exception`) and S110 (no bare try/except/pass) both fire
+# against this codebase's intentional resilience pattern: collectors/pollers (k8s watch,
+# healthcheck probing, node-agent connections) deliberately catch broadly so one transient
+# failure (network blip, apiserver restart, unreachable agent) logs and retries instead of
+# crashing the whole collector loop.
+ignore = ["BLE001", "S110"]

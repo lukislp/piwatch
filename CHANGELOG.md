@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/lukislp/piwatch/compare/v1.0.1...v1.0.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* surface the public live demo link in the README ([9d5e61c](https://github.com/lukislp/piwatch/commit/9d5e61c0b71d55976093915d711764acc0fe6fd3))
+
 ## [1.0.1](https://github.com/lukislp/piwatch/compare/v1.0.0...v1.0.1) (2026-08-05)
 
 

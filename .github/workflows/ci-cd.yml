@@ -47,7 +47,6 @@ jobs:
           name: coverage-badge
           path: backend/coverage-badge.json
           retention-days: 7
-        working-directory: backend
 
   test-frontend:
     runs-on: ubuntu-latest

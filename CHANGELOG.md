@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/lukislp/piwatch/compare/v1.0.0...v1.0.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* surface build/release/license status via README badges ([7c8d85d](https://github.com/lukislp/piwatch/commit/7c8d85d8252ceef622ecf823960abefb8f460fea))
+
 # 1.0.0 (2026-08-04)
 
 

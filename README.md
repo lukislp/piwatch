@@ -10,6 +10,12 @@ Self-hosted real-time monitoring for a k3s cluster: **FastAPI backend** +
 highly available with **2 replicas** (a node goes down ⇒ the second replica
 takes over, the frontend reconnects automatically).
 
+**[Live demo](https://piwatch-demo.lktec.org)** — running the actual
+`ghcr.io/lukislp/piwatch:latest` image published by this repo's own CI/CD pipeline, in its
+built-in demo mode (`PIWATCH_DEMO=1`): a simulated 3-node Raspberry Pi cluster with
+live-changing CPU/memory/temperature/disk metrics, pods, deployments, and events - no real
+cluster involved.
+
 ## Features
 
 - **Kubernetes live**: nodes, pods, deployments, events via the watch API (no polling)

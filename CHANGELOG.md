@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/lukislp/piwatch/compare/v1.0.2...v1.0.3) (2026-08-05)
+
+
+### Bug Fixes
+
+* add an overview dashboard screenshot to the README ([97d2c7a](https://github.com/lukislp/piwatch/commit/97d2c7adfdc20c87c080b52712649bda6879ecdf))
+
 ## [1.0.2](https://github.com/lukislp/piwatch/compare/v1.0.1...v1.0.2) (2026-08-05)
 
 

@@ -16,6 +16,8 @@ built-in demo mode (`PIWATCH_DEMO=1`): a simulated 3-node Raspberry Pi cluster w
 live-changing CPU/memory/temperature/disk metrics, pods, deployments, and events - no real
 cluster involved.
 
+![PiWatch overview dashboard, live demo screenshot](docs/screenshot.png)
+
 ## Features
 
 - **Kubernetes live**: nodes, pods, deployments, events via the watch API (no polling)

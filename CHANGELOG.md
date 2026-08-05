@@ -1,3 +1,15 @@
+# [1.1.0](https://github.com/lukislp/piwatch/compare/v1.0.3...v1.1.0) (2026-08-05)
+
+
+### Bug Fixes
+
+* remove invalid working-directory key on the upload-artifact step ([fee884f](https://github.com/lukislp/piwatch/commit/fee884f4eec76bd67776c78715e328730d28dcf1))
+
+
+### Features
+
+* add a self-hosted test coverage badge ([c5822f0](https://github.com/lukislp/piwatch/commit/c5822f08ad54fa2d540f787927e867b11d45e08b))
+
 ## [1.0.3](https://github.com/lukislp/piwatch/compare/v1.0.2...v1.0.3) (2026-08-05)
 
 

@@ -4,6 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/lukislp/piwatch)](https://github.com/lukislp/piwatch/releases)
 [![License: MIT](https://img.shields.io/github/license/lukislp/piwatch)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB)](https://www.python.org/)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/lukislp/piwatch/master/.github/badges/coverage.json)](https://github.com/lukislp/piwatch/actions/workflows/ci-cd.yml)
 
 Self-hosted real-time monitoring for a k3s cluster: **FastAPI backend** +
 **React frontend** in a single container, live updates over **WebSocket**,

@@ -4,5 +4,8 @@ frontend/tsconfig.tsbuildinfo
 __pycache__/
 *.pyc
 .ruff_cache/
+backend/.coverage
+backend/coverage.json
+backend/coverage-badge.json
 deploy/secret.yaml
 CLAUDE.md

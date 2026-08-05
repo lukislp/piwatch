@@ -1,5 +1,10 @@
 # 📡 PiWatch – k3s monitoring dashboard for Raspberry Pi
 
+[![CI/CD](https://github.com/lukislp/piwatch/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/lukislp/piwatch/actions/workflows/ci-cd.yml)
+[![Release](https://img.shields.io/github/v/release/lukislp/piwatch)](https://github.com/lukislp/piwatch/releases)
+[![License: MIT](https://img.shields.io/github/license/lukislp/piwatch)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB)](https://www.python.org/)
+
 Self-hosted real-time monitoring for a k3s cluster: **FastAPI backend** +
 **React frontend** in a single container, live updates over **WebSocket**,
 highly available with **2 replicas** (a node goes down ⇒ the second replica

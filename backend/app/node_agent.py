@@ -51,7 +51,9 @@ def read_meminfo() -> dict[str, int]:
                 key, _, rest = line.partition(":")
                 if key in ("MemTotal", "MemAvailable"):
                     out[key] = int(rest.strip().split()[0])  # kB
-    except (OSError, ValueError):
+    # IndexError included like in read_load(): a malformed line with nothing after the
+    # colon must degrade to a partial/empty dict, not 500 the /metrics endpoint.
+    except (OSError, ValueError, IndexError):
         pass
     return out
 
@@ -60,7 +62,9 @@ def read_uptime_s() -> int | None:
     try:
         with open(f"{PROC}/uptime") as f:
             return int(float(f.read().split()[0]))
-    except (OSError, ValueError):
+    # IndexError included like in read_load(): an empty /proc/uptime must degrade to
+    # None, not 500 the /metrics endpoint.
+    except (OSError, ValueError, IndexError):
         return None
 
 

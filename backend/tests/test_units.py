@@ -468,8 +468,14 @@ def test_run_http_timeout(monkeypatch):
 
 
 async def _start_raw_tcp_server():
-    def handler(_reader, _writer):
-        return None
+    # The handler MUST close its own writer: since Python 3.12.1,
+    # Server.wait_closed() genuinely waits for every connection handler to
+    # finish and its transport to close - a handler that leaves the
+    # server-side writer open makes the test's `await server.wait_closed()`
+    # hang forever on 3.12 (observed as a stuck CI job; 3.13+ happened to
+    # reap the transport on client disconnect before wait_closed looked).
+    def handler(_reader, writer):
+        writer.close()
 
     server = await asyncio.start_server(handler, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]

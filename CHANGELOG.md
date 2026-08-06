@@ -1,3 +1,11 @@
+## [1.1.1](https://github.com/lukislp/piwatch/compare/v1.1.0...v1.1.1) (2026-08-06)
+
+
+### Bug Fixes
+
+* catch IndexError in read_uptime_s and read_meminfo like read_load already does ([5f29d23](https://github.com/lukislp/piwatch/commit/5f29d23b2b72b2cbb99fd5a0c0a9d5a729fcc503))
+* close the server-side writer in the raw TCP test helper ([6295440](https://github.com/lukislp/piwatch/commit/62954403da7c87aa9a16116876f88e8fe4c7ee49))
+
 # [1.1.0](https://github.com/lukislp/piwatch/compare/v1.0.3...v1.1.0) (2026-08-05)
 
 

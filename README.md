@@ -61,20 +61,23 @@ tested with NGINX Gateway Fabric). If you're on ingress-nginx or another
 controller, swap `httproute.yaml`/`RateLimitPolicy` for an `Ingress` resource
 and adjust `deploy/kustomization.yaml` accordingly.
 
-Before deploying, adjust the image references in `deploy/deployment.yaml` and
-`deploy/daemonset-node-agent.yaml` (currently `registry.example.com/your-namespace/piwatch:latest`)
-and the hostnames in `deploy/httproute.yaml` to point at your own registry and domains.
+Before deploying, adjust the hostnames in `deploy/httproute.yaml` to point at
+your own domains.
 
-1. **Build & push the image** (multi-arch, from your PC — no CI job for the
-   build, a manual push per change):
+1. **Image**: the manifests in `deploy/` reference `registry.example.com/your-namespace/piwatch:latest`
+   as a placeholder — for a stock, unmodified deployment, just point them at
+   the multi-arch image this repo's own CI/CD pipeline already builds and
+   publishes on every release, `ghcr.io/lukislp/piwatch:latest` (or a pinned
+   `:X.Y.Z` version tag). You only need to build your own image if you've
+   forked or modified the code:
    ```bash
    docker buildx build --platform linux/arm64,linux/amd64 \
-     -t registry.example.com/your-namespace/piwatch:latest --push .
+     -t your-registry/your-namespace/piwatch:latest --push .
    ```
-   Repeat this command on every code change (the tag stays "latest" —
-   `imagePullPolicy: Always` picks it up automatically, but running pods
-   still need a manual restart to pull it: `kubectl -n monitoring rollout
-   restart deployment/piwatch daemonset/piwatch-node-agent`).
+   Either way, running pods need a restart to pull a newly-pushed `:latest`
+   (`imagePullPolicy: Always` picks it up automatically, but won't force a
+   restart on its own): `kubectl -n monitoring rollout restart
+   deployment/piwatch daemonset/piwatch-node-agent`.
 
 2. **Create the Secret** — `.\create-secret.ps1` (interactively asks only for
    the login password, generates the signing key automatically at random,

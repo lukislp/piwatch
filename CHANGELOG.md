@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/lukislp/piwatch/compare/v1.1.2...v1.1.3) (2026-08-07)
+
+
+### Bug Fixes
+
+* correct README deployment section to match the real CI/CD-built image ([eb4f13e](https://github.com/lukislp/piwatch/commit/eb4f13e8b629850b54b9335bc539f2fe6e64372c))
+
 ## [1.1.2](https://github.com/lukislp/piwatch/compare/v1.1.1...v1.1.2) (2026-08-07)
 
 

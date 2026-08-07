@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/lukislp/piwatch/compare/v1.1.1...v1.1.2) (2026-08-07)
+
+
+### Bug Fixes
+
+* re-trigger CI after the previous push's webhook was dropped during a GitHub Actions incident ([fa9b19c](https://github.com/lukislp/piwatch/commit/fa9b19c35cc26332b079a7381283e67eb820f21b))
+
 ## [1.1.1](https://github.com/lukislp/piwatch/compare/v1.1.0...v1.1.1) (2026-08-06)
 
 

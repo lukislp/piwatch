@@ -35,8 +35,10 @@ jobs:
       - run: pip install pytest pytest-cov ruff
       - run: python -m pytest tests/ --cov=app --cov-report=json:coverage.json
         working-directory: backend
-      # No pyproject.toml/ruff.toml is committed - ruff's own defaults are a real,
-      # non-fabricated lint gate without inventing new project config.
+      # backend/pyproject.toml exists and is picked up automatically (working-directory:
+      # backend, below). Its [tool.ruff.lint] ignores BLE001 (no blind `except Exception`) and
+      # S110 (no bare try/except/pass), for the collectors/pollers' intentional broad-catch
+      # resilience pattern - so the lint gate is narrower than plain ruff defaults.
       - run: ruff check .
       # Self-hosted coverage badge (no external service), same pattern as the other repos:
       # downloaded and committed by the semantic-release job below.
@@ -107,13 +109,12 @@ jobs:
     concurrency:
       group: piwatch-release-chain
       cancel-in-progress: false
-    # @semantic-release/github verifies push/write access as part of its plugin lifecycle
-    # even during a dry run - a read-only token fails that check outright. No actual writes
-    # happen here regardless of these permissions; dry_run: true never pushes/tags/releases.
+    # @semantic-release/github's verifyConditions step checks repo push access even during a
+    # dry run, so contents: write is required here. issues/pull-requests: write are only used
+    # by the publish/success/fail lifecycle steps, which dry_run: true skips entirely - so they
+    # are omitted here (unlike the real semantic-release job below, which needs the full set).
     permissions:
       contents: write
-      issues: write
-      pull-requests: write
     outputs:
       next_version: ${{ steps.semrel.outputs.new_release_version }}
       published: ${{ steps.semrel.outputs.new_release_published }}

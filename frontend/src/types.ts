@@ -114,6 +114,17 @@ export interface CheckResult {
   detail?: string;
 }
 
+export interface FluxKustomization {
+  key: string;
+  name: string;
+  namespace: string;
+  ready: boolean;
+  reason?: string | null;
+  message?: string | null;
+  last_applied_revision?: string | null;
+  last_transition_time?: string | null;
+}
+
 export interface HealthcheckEntry {
   config: { name: string; type?: string; url?: string; host?: string; port?: number; interval?: number };
   last?: CheckResult;
@@ -133,6 +144,7 @@ export interface Snapshot {
   pod_metrics: Record<string, PodMetrics>;
   node_history: Record<string, HistoryPoint[]>;
   healthchecks: Record<string, HealthcheckEntry>;
+  flux_kustomizations: Record<string, FluxKustomization>;
 }
 
 export type ConnStatus = "connecting" | "open" | "closed" | "unauthorized";

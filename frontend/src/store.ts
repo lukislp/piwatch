@@ -95,6 +95,8 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
         node_history: { ...snap.node_history, [node]: [...hist.slice(-(HISTORY_LEN - 1)), point] },
       };
     }
+    case "flux_kustomizations":
+      return { ...snap, flux_kustomizations: d };
     case "healthcheck": {
       const name = d.name as string;
       const entry = snap.healthchecks[name] ?? { config: { name }, history: [] };

@@ -22,6 +22,11 @@ rules:
   - apiGroups: [metrics.k8s.io]
     resources: [nodes, pods]
     verbs: [get, list]
+  # Optional: only used if Flux is installed (see backend/app/collectors/flux.py). Harmless
+  # if the CRD doesn't exist -- RBAC rules for a nonexistent resource type never match anything.
+  - apiGroups: [kustomize.toolkit.fluxcd.io]
+    resources: [kustomizations]
+    verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

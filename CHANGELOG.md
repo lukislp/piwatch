@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/lukislp/piwatch/compare/v1.6.0...v1.7.0) (2026-08-15)
+
+
+### Features
+
+* detect OOMKilled containers in the Workloads table ([0011a46](https://github.com/lukislp/piwatch/commit/0011a46976f2e4aac0355d0b0825de234958f99a))
+
 # [1.6.0](https://github.com/lukislp/piwatch/compare/v1.5.1...v1.6.0) (2026-08-15)
 
 

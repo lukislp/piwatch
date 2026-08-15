@@ -118,30 +118,44 @@ async def run(state: ClusterState):
     # --- seed Flux Kustomization sync status (showcases the GitOps section even
     # though there's no real Flux/cluster behind demo mode) ---
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    state.set_flux_kustomizations(
-        {
-            "flux-system/piwatch-deploy": {
-                "key": "flux-system/piwatch-deploy",
-                "name": "piwatch-deploy",
-                "namespace": "flux-system",
-                "ready": True,
-                "reason": "ReconciliationSucceeded",
-                "message": "Applied revision: main@sha1:demo1234",
-                "last_applied_revision": "main@sha1:demo1234",
-                "last_transition_time": now_iso,
-            },
-            "flux-system/infra": {
-                "key": "flux-system/infra",
-                "name": "infra",
-                "namespace": "flux-system",
-                "ready": True,
-                "reason": "ReconciliationSucceeded",
-                "message": "Applied revision: main@sha1:demo5678",
-                "last_applied_revision": "main@sha1:demo5678",
-                "last_transition_time": now_iso,
-            },
-        }
-    )
+    FLUX_INTERVAL_S = 300  # matches the 5m interval real Flux Kustomizations commonly use
+
+    def _seed_flux():
+        # Anchored to wall-clock time (not tracked state) so the countdown cycles cleanly
+        # without needing its own timer -- each Kustomization just gets a different phase
+        # offset so they don't all reconcile in perfect lockstep, like real ones wouldn't.
+        def next_reconcile(offset_s: float) -> float:
+            elapsed = time.time() - state.started_at + offset_s
+            remaining = FLUX_INTERVAL_S - (elapsed % FLUX_INTERVAL_S)
+            return time.time() + remaining
+
+        state.set_flux_kustomizations(
+            {
+                "flux-system/piwatch-deploy": {
+                    "key": "flux-system/piwatch-deploy",
+                    "name": "piwatch-deploy",
+                    "namespace": "flux-system",
+                    "ready": True,
+                    "reason": "ReconciliationSucceeded",
+                    "message": "Applied revision: main@sha1:demo1234",
+                    "last_applied_revision": "main@sha1:demo1234",
+                    "last_transition_time": now_iso,
+                    "next_reconcile_t": next_reconcile(0),
+                },
+                "flux-system/infra": {
+                    "key": "flux-system/infra",
+                    "name": "infra",
+                    "namespace": "flux-system",
+                    "ready": True,
+                    "reason": "ReconciliationSucceeded",
+                    "message": "Applied revision: main@sha1:demo5678",
+                    "last_applied_revision": "main@sha1:demo5678",
+                    "next_reconcile_t": next_reconcile(90),
+                },
+            }
+        )
+
+    _seed_flux()
 
     # --- walkers per node ---
     cpu = {n: _Walker(rng.uniform(15, 45), 2, 95, 6) for n in NODES}
@@ -225,6 +239,9 @@ async def run(state: ClusterState):
             state.record_pod_sample(
                 key, {"cpu_cores": round(pod_cpu[key].next(), 3), "mem_bytes": int(pod_mem[key].next())}
             )
+        # keep the GitOps countdown correct if a demo session runs past one full cycle
+        if tick % 12 == 0:
+            _seed_flux()
         # occasionally emit an event / a pod restart
         if tick % 6 == 0:
             etype, reason, msg = rng.choice(EVENT_SAMPLES)

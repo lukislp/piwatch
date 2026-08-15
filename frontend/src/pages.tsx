@@ -86,14 +86,32 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
 // ---------------- GitOps (Flux Kustomization sync status) ----------------
 // Hidden entirely when empty: most piwatch users don't run Flux, and an
 // empty "GitOps" card would just be confusing clutter for them.
+/** Ticks once a second so countdowns re-render without needing a fresh snapshot. */
+function useNow(intervalMs = 1000): number {
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now() / 1000), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+function fmtCountdown(remainingS: number): string {
+  if (remainingS <= 0) return "due";
+  const m = Math.floor(remainingS / 60);
+  const s = Math.floor(remainingS % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 function GitOpsStatus({ snap }: { snap: Snapshot }) {
+  const now = useNow();
   const items = Object.values(snap.flux_kustomizations).sort((a, b) => a.name.localeCompare(b.name));
   if (items.length === 0) return null;
   return (
     <div className="card">
       <h2>GitOps (Flux)</h2>
       <table>
-        <thead><tr><th>Kustomization</th><th>Namespace</th><th>Status</th><th>Revision</th></tr></thead>
+        <thead><tr><th>Kustomization</th><th>Namespace</th><th>Status</th><th>Revision</th><th className="num">Next sync</th></tr></thead>
         <tbody>
           {items.map((k) => (
             <tr key={k.key}>
@@ -104,6 +122,9 @@ function GitOpsStatus({ snap }: { snap: Snapshot }) {
                 {k.ready ? "Synced" : (k.reason ?? "Not synced")}
               </td>
               <td className="mono muted">{k.last_applied_revision ?? "–"}</td>
+              <td className="num muted">
+                {k.next_reconcile_t != null ? fmtCountdown(k.next_reconcile_t - now) : "–"}
+              </td>
             </tr>
           ))}
         </tbody>

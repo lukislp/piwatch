@@ -125,6 +125,9 @@ export interface FluxKustomization {
   message?: string | null;
   last_applied_revision?: string | null;
   last_transition_time?: string | null;
+  /** Unix seconds. Derived server-side (last reconcile + spec.interval); null if
+   * either input is missing (e.g. the resource was just created). */
+  next_reconcile_t?: number | null;
 }
 
 export interface HealthcheckEntry {

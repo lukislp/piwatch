@@ -629,10 +629,12 @@ def test_metrics_run_records_pod_usage_and_skips_unparsable(monkeypatch):
 
 
 def _kustomization_obj(
-    name="piwatch-deploy", namespace="flux-system", ready=True, revision="main@sha1:abc123"
+    name="piwatch-deploy", namespace="flux-system", ready=True, revision="main@sha1:abc123",
+    interval=None, last_reconciled=None,
 ):
-    return {
+    obj = {
         "metadata": {"name": name, "namespace": namespace},
+        "spec": {},
         "status": {
             "lastAppliedRevision": revision,
             "conditions": [
@@ -646,6 +648,11 @@ def _kustomization_obj(
             ],
         },
     }
+    if interval is not None:
+        obj["spec"]["interval"] = interval
+    if last_reconciled is not None:
+        obj["status"]["history"] = [{"lastReconciled": last_reconciled}]
+    return obj
 
 
 def test_map_kustomization_extracts_ready_condition():
@@ -672,6 +679,69 @@ def test_map_kustomization_missing_ready_condition_defaults_to_not_ready():
     d = _map_kustomization({"metadata": {"name": "x", "namespace": "ns"}, "status": {}})
     assert d["ready"] is False
     assert d["reason"] is None
+    assert d["next_reconcile_t"] is None
+
+
+def test_map_kustomization_computes_next_reconcile_from_history_and_interval():
+    from app.collectors.flux import _map_kustomization
+
+    d = _map_kustomization(
+        _kustomization_obj(interval="5m", last_reconciled="2026-01-01T00:00:00Z")
+    )
+    import datetime
+
+    expected = datetime.datetime(2026, 1, 1, 0, 5, 0, tzinfo=datetime.timezone.utc).timestamp()
+    assert d["next_reconcile_t"] == pytest.approx(expected)
+
+
+def test_map_kustomization_falls_back_to_ready_transition_time_without_history():
+    """No status.history yet (e.g. right after the resource is created) --
+    falls back to the Ready condition's lastTransitionTime."""
+    from app.collectors.flux import _map_kustomization
+
+    d = _map_kustomization(_kustomization_obj(interval="1m"))
+    import datetime
+
+    expected = datetime.datetime(2026, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc).timestamp()
+    assert d["next_reconcile_t"] == pytest.approx(expected)
+
+
+def test_map_kustomization_next_reconcile_none_without_interval():
+    from app.collectors.flux import _map_kustomization
+
+    d = _map_kustomization(_kustomization_obj(last_reconciled="2026-01-01T00:00:00Z"))
+    assert d["next_reconcile_t"] is None
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("5m", 300),
+        ("1h30m", 5400),
+        ("30s", 30),
+        ("1500ms", 1.5),
+        ("90m", 5400),
+        (None, None),
+        ("", None),
+        ("garbage", None),
+    ],
+)
+def test_parse_go_duration(value, expected):
+    from app.collectors.flux import _parse_go_duration
+
+    result = _parse_go_duration(value)
+    if expected is None:
+        assert result is None
+    else:
+        assert result == pytest.approx(expected)
+
+
+def test_parse_iso_handles_zulu_suffix():
+    from app.collectors.flux import _parse_iso
+
+    assert _parse_iso("2026-01-01T00:00:00Z") is not None
+    assert _parse_iso(None) is None
+    assert _parse_iso("not-a-date") is None
 
 
 def test_flux_run_polls_and_publishes_kustomizations(monkeypatch):

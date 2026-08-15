@@ -105,6 +105,34 @@ async def run(state: ClusterState):
             },
         )
 
+    # --- seed Flux Kustomization sync status (showcases the GitOps section even
+    # though there's no real Flux/cluster behind demo mode) ---
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    state.set_flux_kustomizations(
+        {
+            "flux-system/piwatch-deploy": {
+                "key": "flux-system/piwatch-deploy",
+                "name": "piwatch-deploy",
+                "namespace": "flux-system",
+                "ready": True,
+                "reason": "ReconciliationSucceeded",
+                "message": "Applied revision: main@sha1:demo1234",
+                "last_applied_revision": "main@sha1:demo1234",
+                "last_transition_time": now_iso,
+            },
+            "flux-system/infra": {
+                "key": "flux-system/infra",
+                "name": "infra",
+                "namespace": "flux-system",
+                "ready": True,
+                "reason": "ReconciliationSucceeded",
+                "message": "Applied revision: main@sha1:demo5678",
+                "last_applied_revision": "main@sha1:demo5678",
+                "last_transition_time": now_iso,
+            },
+        }
+    )
+
     # --- walkers per node ---
     cpu = {n: _Walker(rng.uniform(15, 45), 2, 95, 6) for n in NODES}
     mem = {n: _Walker(rng.uniform(35, 60), 20, 90, 2) for n in NODES}

@@ -78,7 +78,46 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
           );
         })}
       </div>
+      <GitOpsStatus snap={snap} />
     </>
+  );
+}
+
+// ---------------- GitOps (Flux Kustomization sync status) ----------------
+// Hidden entirely when empty: most piwatch users don't run Flux, and an
+// empty "GitOps" card would just be confusing clutter for them.
+function GitOpsStatus({ snap }: { snap: Snapshot }) {
+  const items = Object.values(snap.flux_kustomizations).sort((a, b) => a.name.localeCompare(b.name));
+  if (items.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>GitOps (Flux)</h2>
+      <table>
+        <thead><tr><th>Kustomization</th><th>Namespace</th><th>Status</th><th>Revision</th></tr></thead>
+        <tbody>
+          {items.map((k) => (
+            <tr key={k.key}>
+              <td>{k.name}</td>
+              <td className="muted">{k.namespace}</td>
+              <td>
+                <Dot color={k.ready ? STATUS.good : STATUS.critical} />
+                {k.ready ? "Synced" : (k.reason ?? "Not synced")}
+              </td>
+              <td className="mono muted">{k.last_applied_revision ?? "–"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {items.some((k) => !k.ready && k.message) && (
+        <div className="muted" style={{ marginTop: 8 }}>
+          {items.filter((k) => !k.ready && k.message).map((k) => (
+            <div key={k.key}>
+              <strong>{k.name}:</strong> {k.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

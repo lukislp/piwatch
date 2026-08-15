@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/lukislp/piwatch/compare/v1.12.0...v1.13.0) (2026-08-15)
+
+
+### Features
+
+* watch StatefulSets and DaemonSets on the Workloads page ([10877d3](https://github.com/lukislp/piwatch/commit/10877d3f2e03fc8543d47c8081a325cbf50749cc))
+
 # [1.12.0](https://github.com/lukislp/piwatch/compare/v1.11.2...v1.12.0) (2026-08-15)
 
 

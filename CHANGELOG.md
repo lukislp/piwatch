@@ -1,3 +1,10 @@
+## [1.18.1](https://github.com/lukislp/piwatch/compare/v1.18.0...v1.18.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* keep the Logs tab pod select within its container on mobile ([d8471fd](https://github.com/lukislp/piwatch/commit/d8471fd34c4b80270448acb9821e70ea1a8a4cb5))
+
 # [1.18.0](https://github.com/lukislp/piwatch/compare/v1.17.1...v1.18.0) (2026-08-15)
 
 

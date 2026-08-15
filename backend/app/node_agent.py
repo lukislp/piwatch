@@ -1,9 +1,9 @@
 """Tiny per-node hardware agent, run as a DaemonSet on every Pi.
 
-Exposes GET /metrics with CPU temperature, load, memory, disk, uptime, NVMe
-health and the Pi firmware's under-voltage flag. Reads the host's /sys and
-/proc, which are mounted read-only into the pod (hostPath). Runs from the
-same container image as the backend:
+Exposes GET /metrics with CPU temperature, load, memory, disk, uptime,
+network throughput, NVMe health and the Pi firmware's under-voltage flag.
+Reads the host's /sys and /proc, which are mounted read-only into the pod
+(hostPath). Runs from the same container image as the backend:
 
     uvicorn app.node_agent:app --host 0.0.0.0 --port 9101
 
@@ -149,6 +149,66 @@ def read_nvme_info() -> dict:
     return out
 
 
+def _physical_net_interfaces() -> list[str]:
+    """Real NICs only -- a backing sysfs "device" link is how the kernel
+    distinguishes them from virtual interfaces (loopback, and the veth/cni0/
+    flannel.1 pairs k3s creates per pod), which would otherwise double-count
+    traffic that never actually leaves the node."""
+    out = []
+    for path in sorted(glob.glob(f"{SYS}/class/net/*")):
+        iface = os.path.basename(path)
+        if iface == "lo":
+            continue
+        if os.path.exists(f"{path}/device"):
+            out.append(iface)
+    return out
+
+
+def read_net_bytes() -> tuple[int, int] | None:
+    """Cumulative (rx_bytes, tx_bytes), summed across all physical interfaces.
+    None if there are none, or none of them were readable."""
+    ifaces = _physical_net_interfaces()
+    rx = tx = 0
+    ok = False
+    for iface in ifaces:
+        try:
+            with open(f"{SYS}/class/net/{iface}/statistics/rx_bytes") as f:
+                rx += int(f.read().strip())
+            with open(f"{SYS}/class/net/{iface}/statistics/tx_bytes") as f:
+                tx += int(f.read().strip())
+            ok = True
+        except (OSError, ValueError):
+            continue
+    return (rx, tx) if ok else None
+
+
+# Previous (timestamp, rx_bytes, tx_bytes) sample -- same derive-a-rate-from-a-cumulative-
+# counter approach as _nvme_io_rate(), see its comment for why this is a single process-wide
+# variable rather than something keyed per-interface.
+_last_net_io: tuple[float, int, int] | None = None
+
+
+def _net_io_rate(rx_bytes: int | None, tx_bytes: int | None) -> dict:
+    """Bytes/s in+out since the previous /metrics call. Empty on the first
+    call, or when read_net_bytes() found nothing to sample."""
+    global _last_net_io
+    if rx_bytes is None or tx_bytes is None:
+        return {}
+    now_ = time.monotonic()
+    prev = _last_net_io
+    _last_net_io = (now_, rx_bytes, tx_bytes)
+    if prev is None:
+        return {}
+    prev_t, prev_rx, prev_tx = prev
+    elapsed = now_ - prev_t
+    if elapsed <= 0:
+        return {}
+    return {
+        "net_rx_bytes_per_s": round(max(0, rx_bytes - prev_rx) / elapsed),
+        "net_tx_bytes_per_s": round(max(0, tx_bytes - prev_tx) / elapsed),
+    }
+
+
 def read_undervoltage() -> bool | None:
     """Raspberry Pi firmware under-voltage flag (bad PSU/PoE splitter),
     exposed by the rpi_volt hwmon driver. None if that driver isn't loaded
@@ -262,6 +322,8 @@ def metrics() -> dict:
     payload.update(smart)
     payload.update(read_nvme_ctrl_info())
     payload.update(_nvme_io_rate(smart.get("nvme_data_units_read"), smart.get("nvme_data_units_written")))
+    net = read_net_bytes()
+    payload.update(_net_io_rate(*(net or (None, None))))
     return payload
 
 

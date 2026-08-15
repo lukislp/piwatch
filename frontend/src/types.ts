@@ -85,6 +85,8 @@ export interface NodeMetrics {
   nvme_num_err_log_entries?: number;
   nvme_read_bytes_per_s?: number;
   nvme_write_bytes_per_s?: number;
+  net_rx_bytes_per_s?: number;
+  net_tx_bytes_per_s?: number;
 }
 
 export interface PodMetrics {
@@ -100,6 +102,8 @@ export interface HistoryPoint {
   temp_c?: number;
   nvme_read_bytes_per_s?: number;
   nvme_write_bytes_per_s?: number;
+  net_rx_bytes_per_s?: number;
+  net_tx_bytes_per_s?: number;
   [k: string]: number | undefined;
 }
 

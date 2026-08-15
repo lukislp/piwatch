@@ -40,7 +40,8 @@ class ClusterState:
         # often enough that a per-pod ring buffer would be an unbounded memory sink)
         self.pod_metrics: dict[str, dict[str, Any]] = {}
 
-        # Time series: node -> deque[{t, cpu_pct, mem_pct, temp_c, nvme_read_bytes_per_s, nvme_write_bytes_per_s}]
+        # Time series: node -> deque[{t, cpu_pct, mem_pct, temp_c, nvme_read_bytes_per_s,
+        # nvme_write_bytes_per_s, net_rx_bytes_per_s, net_tx_bytes_per_s}]
         self.node_history: dict[str, deque[dict[str, Any]]] = {}
 
         # Healthchecks: name -> {config, last, history: deque[{t, ok, ms}]}
@@ -117,6 +118,8 @@ class ClusterState:
                 "temp_c": merged.get("temp_c"),
                 "nvme_read_bytes_per_s": merged.get("nvme_read_bytes_per_s"),
                 "nvme_write_bytes_per_s": merged.get("nvme_write_bytes_per_s"),
+                "net_rx_bytes_per_s": merged.get("net_rx_bytes_per_s"),
+                "net_tx_bytes_per_s": merged.get("net_tx_bytes_per_s"),
             }
         )
         self.publish("node_metrics", {"node": node, **merged})

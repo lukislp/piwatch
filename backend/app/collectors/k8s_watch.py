@@ -72,6 +72,7 @@ def map_pod(p) -> dict:
         "ready": f"{ready}/{len(statuses)}" if statuses else "0/0",
         "restarts": restarts,
         "containers": [c.name for c in (p.spec.containers or [])],
+        "images": [c.image for c in (p.spec.containers or [])],
         "created": p.metadata.creation_timestamp.timestamp() if p.metadata.creation_timestamp else None,
     }
 

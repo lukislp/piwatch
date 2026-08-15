@@ -162,6 +162,7 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       <GitOpsStatus snap={snap} />
       <ImageAutomationStatus snap={snap} />
       <GatewayStatus snap={snap} />
+      <LoadBalancerStatus snap={snap} />
     </>
   );
 }
@@ -450,6 +451,51 @@ function GatewayStatus({ snap }: { snap: Snapshot }) {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// ---------------- LoadBalancer Services ----------------
+// Hidden entirely when empty, same reasoning as GatewayStatus: not every cluster
+// runs a LoadBalancer controller (e.g. MetalLB).
+function LoadBalancerStatus({ snap }: { snap: Snapshot }) {
+  const services = Object.values(snap.services).sort((a, b) => a.key.localeCompare(b.key));
+  if (services.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>LoadBalancer Services</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Namespace</th>
+            <th>Cluster IP</th>
+            <th>External IP</th>
+            <th>Ports</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {services.map((s) => {
+            const pending = s.external_ips.length === 0;
+            return (
+              <tr key={s.key}>
+                <td>{s.name}</td>
+                <td className="muted">{s.namespace}</td>
+                <td className="mono muted">{s.cluster_ip ?? "–"}</td>
+                <td className="mono muted">{s.external_ips.join(", ") || "–"}</td>
+                <td className="mono muted">
+                  {s.ports.map((p) => `${p.port}/${p.protocol}`).join(", ") || "–"}
+                </td>
+                <td>
+                  <Dot color={pending ? STATUS.warning : STATUS.good} />
+                  {pending ? "⚠ Pending" : "OK"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

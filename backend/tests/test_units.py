@@ -1189,6 +1189,25 @@ def test_upsert_and_remove_statefulset_and_daemonset_update_state_and_publish():
     asyncio.run(scenario())
 
 
+def test_upsert_and_remove_service_updates_state_and_publish():
+    async def scenario():
+        st = ClusterState()
+        q = st.subscribe()
+
+        st.upsert_service("ns/svc-1", {"key": "ns/svc-1"})
+        assert "ns/svc-1" in st.services
+        assert "services" in st.snapshot()
+
+        st.remove_service("ns/svc-1")
+        st.remove_service("does-not-exist")  # pop(..., None): must not raise
+        assert "ns/svc-1" not in st.services
+
+        msgs = [q.get_nowait() for _ in range(2)]
+        assert [m["type"] for m in msgs] == ["service", "service_deleted"]
+
+    asyncio.run(scenario())
+
+
 # ============================ collectors.demo ================================
 
 def test_fake_logs_yields_formatted_lines_and_handles_both_msg_shapes(monkeypatch):

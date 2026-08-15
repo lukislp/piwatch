@@ -63,6 +63,23 @@ export interface DaemonSetInfo {
   images: string[];
 }
 
+export interface ServicePort {
+  port: number;
+  protocol: string;
+  name?: string | null;
+}
+
+export interface ServiceInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  type: string;
+  cluster_ip?: string | null;
+  /** Empty while the LoadBalancer controller hasn't assigned an address yet. */
+  external_ips: string[];
+  ports: ServicePort[];
+}
+
 export interface EventInfo {
   uid: string;
   type: string;
@@ -255,6 +272,7 @@ export interface Snapshot {
   deployments: Record<string, DeploymentInfo>;
   statefulsets: Record<string, StatefulSetInfo>;
   daemonsets: Record<string, DaemonSetInfo>;
+  services: Record<string, ServiceInfo>;
   events: EventInfo[];
   node_metrics: Record<string, NodeMetrics>;
   hardware: Record<string, NodeMetrics>;

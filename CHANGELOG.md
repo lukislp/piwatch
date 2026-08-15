@@ -1,3 +1,10 @@
+## [1.18.2](https://github.com/lukislp/piwatch/compare/v1.18.1...v1.18.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* auto-healthcheck 4xx false positives and missing config on first WS delta ([af36ef5](https://github.com/lukislp/piwatch/commit/af36ef55f9f9ddabc9e21524eb18b676ee2a93f5))
+
 ## [1.18.1](https://github.com/lukislp/piwatch/compare/v1.18.0...v1.18.1) (2026-08-15)
 
 

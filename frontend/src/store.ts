@@ -154,6 +154,11 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
         },
       };
     }
+    case "healthcheck_deleted": {
+      const healthchecks = { ...snap.healthchecks };
+      delete healthchecks[d.name];
+      return { ...snap, healthchecks };
+    }
     default:
       return snap;
   }

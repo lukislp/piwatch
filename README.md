@@ -75,6 +75,13 @@ cluster involved.
   stuck in `Released` or `Failed` phase -- storage left behind after its PVC was deleted (common
   with a `Retain` reclaim policy) that nothing else surfaces. Hidden entirely when there aren't any
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
+- **Auto-discovered healthchecks** (optional, set `PIWATCH_AUTO_HEALTHCHECKS=1`): a check for
+  every accepted HTTPRoute (HTTP(S) request straight to its Gateway's Service ClusterIP, with
+  the correct TLS SNI/`Host` header for that hostname -- never the public hostname, which usually
+  isn't reachable from inside the cluster's own pod network) and every `type: LoadBalancer`
+  Service (plain TCP reachability per port). Zero YAML to write; runs additively alongside any
+  checks already configured via `PIWATCH_CHECKS_FILE`, and updates live as routes/Services
+  come and go -- no restart needed
 - **Live logs** for any pod, right in the browser
 - **Simple auth**: password from a Kubernetes Secret, signed tokens (failover-friendly)
 - **Dark/light mode**
@@ -188,6 +195,7 @@ cd backend && python -m pytest tests/
 | `PIWATCH_CHECKS_FILE` | Path to the healthcheck YAML | `/config/healthchecks.yaml` |
 | `PIWATCH_AGENT_SERVICE` | Headless service for the node-agents | `piwatch-node-agent.monitoring…` |
 | `PIWATCH_PROMETHEUS_URL` | Prometheus base URL, for PVC usage % (optional) | – |
+| `PIWATCH_AUTO_HEALTHCHECKS` | `1` = auto-generate checks from HTTPRoutes/LoadBalancer Services | – |
 
 ## Deliberate simplifications
 

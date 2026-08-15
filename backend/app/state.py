@@ -237,6 +237,13 @@ class ClusterState:
         entry["uptime_pct"] = round(100.0 * up / len(history), 2)
         self.publish("healthcheck", {"name": name, **result, "uptime_pct": entry["uptime_pct"]})
 
+    def remove_check(self, name: str) -> None:
+        """Only used by collectors/autochecks.py: an auto-discovered check (its target
+        route/Service disappeared) needs to vanish from the UI, unlike YAML-configured
+        checks (a fixed list for the process lifetime, nothing ever removes those)."""
+        if self.healthchecks.pop(name, None) is not None:
+            self.publish("healthcheck_deleted", {"name": name})
+
     # ---------------- snapshot ----------------
 
     def snapshot(self) -> dict:

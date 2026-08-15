@@ -13,6 +13,54 @@ const fmtAge = (t?: number) => {
 };
 const fmtUptime = (s?: number) => (s ? `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h` : "–");
 
+// Kubernetes resource quantity parsing, mirroring backend/app/collectors/metrics.py's
+// parse_cpu/parse_mem -- cpu_capacity/mem_capacity arrive as raw quantity strings
+// (e.g. "4", "8Gi") since they come straight from the node spec, not metrics-server.
+function parseCpuQty(v?: string): number {
+  if (!v) return 0;
+  const s = v.trim();
+  if (s.endsWith("n")) return parseFloat(s) / 1e9;
+  if (s.endsWith("u")) return parseFloat(s) / 1e6;
+  if (s.endsWith("m")) return parseFloat(s) / 1e3;
+  return parseFloat(s) || 0;
+}
+
+const MEM_QTY_FACTORS: [string, number][] = [
+  ["Ki", 1024], ["Mi", 1024 ** 2], ["Gi", 1024 ** 3], ["Ti", 1024 ** 4],
+  ["K", 1e3], ["M", 1e6], ["G", 1e9], ["T", 1e12],
+];
+
+function parseMemQty(v?: string): number {
+  if (!v) return 0;
+  const s = v.trim();
+  for (const [suffix, factor] of MEM_QTY_FACTORS) {
+    if (s.endsWith(suffix)) return (parseFloat(s.slice(0, -suffix.length)) || 0) * factor;
+  }
+  return parseFloat(s) || 0;
+}
+
+function capacityTone(pct: number): "good" | "warning" | "critical" {
+  if (pct >= 90) return "critical";
+  if (pct >= 75) return "warning";
+  return "good";
+}
+
+// Both numbers share one unit (e.g. "11/24 GB") so the tile value stays short
+// enough not to wrap in the fixed-width tiles grid.
+function fmtBytesPair(used: number, total: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let u = used;
+  let t = total;
+  let i = 0;
+  while (t >= 1024 && i < units.length - 1) {
+    u /= 1024;
+    t /= 1024;
+    i++;
+  }
+  const fmt = (v: number) => (i > 0 && v % 1 !== 0 ? v.toFixed(1) : v.toFixed(0));
+  return `${fmt(u)}/${fmt(t)} ${units[i]}`;
+}
+
 // ---------------- Overview ----------------
 export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const nodes = Object.values(snap.nodes);
@@ -24,6 +72,14 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const depsReady = deps.filter((d) => d.ready >= d.replicas).length;
   const checksUp = checks.filter((c) => c.last?.ok).length;
   const warnings = snap.events.filter((e) => e.type === "Warning").length;
+
+  const cpuCapacity = nodes.reduce((sum, n) => sum + parseCpuQty(n.cpu_capacity), 0);
+  const memCapacity = nodes.reduce((sum, n) => sum + parseMemQty(n.mem_capacity), 0);
+  const cpuUsed = nodes.reduce((sum, n) => sum + (snap.node_metrics[n.name]?.cpu_cores ?? 0), 0);
+  const memUsed = nodes.reduce((sum, n) => sum + (snap.node_metrics[n.name]?.mem_bytes ?? 0), 0);
+  const cpuPct = cpuCapacity > 0 ? (100 * cpuUsed) / cpuCapacity : 0;
+  const memPct = memCapacity > 0 ? (100 * memUsed) / memCapacity : 0;
+
   return (
     <>
       <div className="grid tiles">
@@ -32,6 +88,12 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
         <Tile value={`${depsReady}/${deps.length}`} label="Deployments ready" tone={depsReady === deps.length ? "good" : "warning"} />
         {checks.length > 0 && <Tile value={`${checksUp}/${checks.length}`} label="Healthchecks OK" tone={checksUp === checks.length ? "good" : "critical"} />}
         <Tile value={String(warnings)} label="Warning events" tone={warnings === 0 ? "good" : "warning"} />
+        {cpuCapacity > 0 && (
+          <Tile value={`${cpuUsed.toFixed(1)}/${cpuCapacity.toFixed(0)}`} label={`CPU cores (${cpuPct.toFixed(0)}%)`} tone={capacityTone(cpuPct)} />
+        )}
+        {memCapacity > 0 && (
+          <Tile value={fmtBytesPair(memUsed, memCapacity)} label={`RAM used (${memPct.toFixed(0)}%)`} tone={capacityTone(memPct)} />
+        )}
       </div>
       <div className="grid cards">
         {nodes.sort((a, b) => a.name.localeCompare(b.name)).map((n) => {

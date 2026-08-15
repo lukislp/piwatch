@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/lukislp/piwatch/compare/v1.3.0...v1.4.0) (2026-08-15)
+
+
+### Features
+
+* **flux:** wire piwatch into Flux-managed GitOps deployment ([52b6cef](https://github.com/lukislp/piwatch/commit/52b6cef44a507af31671ab19805bb2a10cca71f8))
+
 # [1.3.0](https://github.com/lukislp/piwatch/compare/v1.2.0...v1.3.0) (2026-08-15)
 
 

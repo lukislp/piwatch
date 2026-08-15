@@ -62,6 +62,11 @@ class ClusterState:
         # is set -- see collectors/pvc.py.
         self.pvcs: dict[str, dict[str, Any]] = {}
 
+        # Gateway API routing status (ns/name -> mapped dict). Optional -- stays empty on
+        # clusters that don't use the Gateway API; see collectors/gateway.py.
+        self.gateways: dict[str, dict[str, Any]] = {}
+        self.http_routes: dict[str, dict[str, Any]] = {}
+
         self._subscribers: set[asyncio.Queue] = set()
 
     # ---------------- pub/sub ----------------
@@ -193,6 +198,14 @@ class ClusterState:
         self.pvcs = items
         self.publish("pvcs", items)
 
+    def set_gateways(self, items: dict[str, dict]) -> None:
+        self.gateways = items
+        self.publish("gateways", items)
+
+    def set_http_routes(self, items: dict[str, dict]) -> None:
+        self.http_routes = items
+        self.publish("http_routes", items)
+
     def record_check(self, name: str, config: dict, ok: bool, latency_ms: float | None, detail: str = "") -> None:
         entry = self.healthchecks.setdefault(
             name, {"config": config, "history": deque(maxlen=CHECK_HISTORY_LEN)}
@@ -227,6 +240,8 @@ class ClusterState:
             "flux_image_policies": self.flux_image_policies,
             "flux_image_automations": self.flux_image_automations,
             "pvcs": self.pvcs,
+            "gateways": self.gateways,
+            "http_routes": self.http_routes,
             "node_history": {k: list(v) for k, v in self.node_history.items()},
             "healthchecks": {
                 name: {

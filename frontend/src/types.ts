@@ -209,6 +209,33 @@ export interface PvcInfo {
   usage_pct?: number | null;
 }
 
+export interface GatewayInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  gateway_class_name?: string | null;
+  ready: boolean;
+  reason?: string | null;
+  message?: string | null;
+  addresses: string[];
+  listener_count: number;
+  listeners_ready: number;
+  attached_routes: number;
+}
+
+export interface HttpRouteInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  hostnames: string[];
+  parent_names: string[];
+  backend_names: string[];
+  accepted: boolean;
+  resolved_refs: boolean;
+  reason?: string | null;
+  message?: string | null;
+}
+
 export interface HealthcheckEntry {
   config: { name: string; type?: string; url?: string; host?: string; port?: number; interval?: number };
   last?: CheckResult;
@@ -235,6 +262,8 @@ export interface Snapshot {
   flux_image_policies: Record<string, FluxImagePolicy>;
   flux_image_automations: Record<string, FluxImageAutomation>;
   pvcs: Record<string, PvcInfo>;
+  gateways: Record<string, GatewayInfo>;
+  http_routes: Record<string, HttpRouteInfo>;
 }
 
 export type ConnStatus = "connecting" | "open" | "closed" | "unauthorized";

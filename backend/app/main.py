@@ -23,7 +23,16 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import auth, ws
-from .collectors import demo, flux, hardware, healthcheck, k8s_watch, metrics, pvc
+from .collectors import (
+    demo,
+    flux,
+    gateway,
+    hardware,
+    healthcheck,
+    k8s_watch,
+    metrics,
+    pvc,
+)
 from .state import state
 
 logging.basicConfig(level=os.environ.get("PIWATCH_LOG_LEVEL", "INFO"))
@@ -63,6 +72,7 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(hardware.run(state)))
         tasks.append(asyncio.create_task(flux.run(state)))
         tasks.append(asyncio.create_task(pvc.run(state)))
+        tasks.append(asyncio.create_task(gateway.run(state)))
     tasks.append(asyncio.create_task(healthcheck.run(state)))
     try:
         yield

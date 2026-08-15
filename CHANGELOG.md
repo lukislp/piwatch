@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/lukislp/piwatch/compare/v1.11.2...v1.12.0) (2026-08-15)
+
+
+### Features
+
+* show the currently installed tag in the Image Automation card ([92f624d](https://github.com/lukislp/piwatch/commit/92f624d3a5dbdced9b16e9aab05c07874af51789))
+
 ## [1.11.2](https://github.com/lukislp/piwatch/compare/v1.11.1...v1.11.2) (2026-08-15)
 
 

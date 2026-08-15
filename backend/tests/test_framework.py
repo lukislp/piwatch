@@ -17,6 +17,7 @@ import importlib
 import os
 import ssl
 import sys
+import time
 import types
 from datetime import datetime, timezone
 from typing import ClassVar
@@ -2295,6 +2296,136 @@ def test_autochecks_run_starts_and_removes_checks_as_state_changes(monkeypatch):
 
 
 # ==================================================================
+# app.collectors.history
+# ==================================================================
+
+
+def test_history_disabled_without_env_var(monkeypatch):
+    from app.collectors import history
+
+    monkeypatch.delenv("PIWATCH_HISTORY_DB", raising=False)
+    assert history._enabled() is False
+
+
+def test_history_enabled_with_env_var(monkeypatch, tmp_path):
+    from app.collectors import history
+
+    monkeypatch.setenv("PIWATCH_HISTORY_DB", str(tmp_path / "history.db"))
+    assert history._enabled() is True
+
+
+def test_history_connect_creates_schema_and_is_reopenable(tmp_path):
+    from app.collectors import history
+
+    path = str(tmp_path / "sub" / "history.db")  # dir doesn't exist yet -> must be created
+    conn = history._connect(path)
+    history._insert(conn, "pi-1", {"t": 1000.0, "cpu_pct": 12.5, "mem_pct": 40.0})
+    conn.close()
+
+    reopened = history._connect(path)
+    row = reopened.execute("SELECT node, t, cpu_pct FROM node_samples").fetchone()
+    reopened.close()
+    assert row == ("pi-1", 1000.0, 12.5)
+
+
+def test_history_prune_removes_only_rows_older_than_retention(tmp_path):
+    from app.collectors import history
+
+    conn = history._connect(str(tmp_path / "history.db"))
+    now = time.time()
+    history._insert(conn, "pi-1", {"t": now - 1000})  # recent -- kept
+    history._insert(conn, "pi-1", {"t": now - 100_000})  # old -- pruned
+
+    removed = history.prune(conn, retention_seconds=10_000)
+    assert removed == 1
+    remaining = conn.execute("SELECT COUNT(*) FROM node_samples").fetchone()[0]
+    assert remaining == 1
+    conn.close()
+
+
+def test_load_startup_history_noop_when_disabled(monkeypatch):
+    from app.collectors import history
+    from app.state import ClusterState
+
+    monkeypatch.delenv("PIWATCH_HISTORY_DB", raising=False)
+    st = ClusterState()
+    history.load_startup_history(st)
+    assert st.node_history == {}
+
+
+def test_load_startup_history_reloads_bounded_recent_samples_per_node(monkeypatch, tmp_path):
+    from app.collectors import history
+    from app.state import ClusterState
+
+    path = str(tmp_path / "history.db")
+    monkeypatch.setenv("PIWATCH_HISTORY_DB", path)
+    monkeypatch.setattr(history, "HISTORY_LEN", 3)  # small cap, easy to exceed in a test
+
+    conn = history._connect(path)
+    now = time.time()
+    for i in range(5):  # more than the (monkeypatched) cap
+        history._insert(conn, "pi-1", {"t": now + i, "cpu_pct": float(i)})
+    conn.close()
+
+    st = ClusterState()
+    history.load_startup_history(st)
+    hist = list(st.node_history["pi-1"])
+    assert len(hist) == 3  # capped, not all 5
+    # the 3 most recent, in chronological (oldest-first) order
+    assert [h["cpu_pct"] for h in hist] == [2.0, 3.0, 4.0]
+
+
+def test_load_startup_history_missing_file_starts_empty(monkeypatch, tmp_path):
+    """A DB that doesn't exist yet (first-ever startup with the feature just enabled) is
+    not a failure -- just nothing to reload."""
+    from app.collectors import history
+    from app.state import ClusterState
+
+    monkeypatch.setenv("PIWATCH_HISTORY_DB", str(tmp_path / "does-not-exist" / "history.db"))
+    st = ClusterState()
+    history.load_startup_history(st)
+    assert st.node_history == {}
+
+
+def test_history_run_disabled_without_env_var_returns_immediately(monkeypatch):
+    from app.collectors import history
+    from app.state import ClusterState
+
+    monkeypatch.delenv("PIWATCH_HISTORY_DB", raising=False)
+    st = ClusterState()
+    asyncio.run(history.run(st))  # must return promptly, not hang
+
+
+def test_history_run_persists_node_metrics_and_prunes_periodically(monkeypatch, tmp_path):
+    from app.collectors import history
+    from app.state import ClusterState
+
+    path = str(tmp_path / "history.db")
+    monkeypatch.setenv("PIWATCH_HISTORY_DB", path)
+    monkeypatch.setenv("PIWATCH_HISTORY_RETENTION_DAYS", "7")
+    monkeypatch.setattr(history, "PRUNE_INTERVAL", 0)  # prune on every loop iteration
+
+    st = ClusterState()
+
+    async def scenario():
+        task = asyncio.create_task(history.run(st))
+        await asyncio.sleep(0.05)  # let run() subscribe before the first sample fires
+        st.record_node_sample("pi-1", {"cpu_pct": 55.0})
+        await asyncio.sleep(0.2)
+
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
+
+    conn = history._connect(path)
+    row = conn.execute("SELECT node, cpu_pct FROM node_samples").fetchone()
+    conn.close()
+    assert row == ("pi-1", 55.0)
+
+
+# ==================================================================
 # app.ws
 # ==================================================================
 
@@ -2621,6 +2752,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
     monkeypatch.setattr(main_mod.pvc, "run", fake_collector)
     monkeypatch.setattr(main_mod.gateway, "run", fake_collector)
     monkeypatch.setattr(main_mod.autochecks, "run", fake_collector)
+    monkeypatch.setattr(main_mod.history, "run", fake_collector)
 
     from fastapi.testclient import TestClient
 
@@ -2630,7 +2762,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
         r = client.get("/readyz")
         assert r.status_code == 503
         assert r.json() == {"ready": False}
-    assert len(started) == 7  # k8s_watch, metrics, hardware, flux, pvc, gateway, autochecks
+    assert len(started) == 8  # k8s_watch, metrics, hardware, flux, pvc, gateway, autochecks, history
 
 
 def test_get_state_endpoint_returns_snapshot(monkeypatch, tmp_path):

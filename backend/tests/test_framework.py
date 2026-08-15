@@ -96,6 +96,26 @@ def _deployment_obj(name="d1", namespace="default"):
     return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
 
 
+def _statefulset_obj(name="s1", namespace="default"):
+    metadata = types.SimpleNamespace(name=name, namespace=namespace)
+    containers = [types.SimpleNamespace(image="registry.local/app:latest")]
+    template = types.SimpleNamespace(spec=types.SimpleNamespace(containers=containers))
+    spec = types.SimpleNamespace(replicas=3, template=template)
+    status = types.SimpleNamespace(ready_replicas=3, updated_replicas=3)
+    return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
+
+
+def _daemonset_obj(name="ds1", namespace="default"):
+    metadata = types.SimpleNamespace(name=name, namespace=namespace)
+    containers = [types.SimpleNamespace(image="registry.local/agent:latest")]
+    template = types.SimpleNamespace(spec=types.SimpleNamespace(containers=containers))
+    spec = types.SimpleNamespace(template=template)
+    status = types.SimpleNamespace(
+        desired_number_scheduled=3, number_ready=3, updated_number_scheduled=3
+    )
+    return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
+
+
 def _event_obj(uid="evt-1"):
     metadata = types.SimpleNamespace(uid=uid, creation_timestamp=None)
     involved = types.SimpleNamespace(kind="Pod", name="p1", namespace="default")
@@ -185,6 +205,28 @@ def test_map_deployment():
     assert d["images"] == ["registry.local/app:latest"]
 
 
+def test_map_statefulset():
+    from app.collectors.k8s_watch import map_statefulset
+
+    d = map_statefulset(_statefulset_obj())
+    assert d["key"] == "default/s1"
+    assert d["replicas"] == 3
+    assert d["ready"] == 3
+    assert d["updated"] == 3
+    assert d["images"] == ["registry.local/app:latest"]
+
+
+def test_map_daemonset():
+    from app.collectors.k8s_watch import map_daemonset
+
+    d = map_daemonset(_daemonset_obj())
+    assert d["key"] == "default/ds1"
+    assert d["desired"] == 3
+    assert d["ready"] == 3
+    assert d["updated"] == 3
+    assert d["images"] == ["registry.local/agent:latest"]
+
+
 def test_map_event_uses_last_timestamp():
     from app.collectors.k8s_watch import map_event
 
@@ -215,6 +257,16 @@ def test_apply_all_kinds_upsert_and_delete():
     assert "ns/d1" in st.deployments
     _apply(st, "deployments", "DELETED", {"key": "ns/d1"})
     assert "ns/d1" not in st.deployments
+
+    _apply(st, "statefulsets", "ADDED", {"key": "ns/s1"})
+    assert "ns/s1" in st.statefulsets
+    _apply(st, "statefulsets", "DELETED", {"key": "ns/s1"})
+    assert "ns/s1" not in st.statefulsets
+
+    _apply(st, "daemonsets", "ADDED", {"key": "ns/ds1"})
+    assert "ns/ds1" in st.daemonsets
+    _apply(st, "daemonsets", "DELETED", {"key": "ns/ds1"})
+    assert "ns/ds1" not in st.daemonsets
 
     _apply(st, "events", "ADDED", {"uid": "e1"})
     assert len(st.events) == 1
@@ -305,7 +357,9 @@ class _FakeWatch:
         return _FakeStream(self.__class__.events, self.__class__.error)
 
 
-def _patch_k8s_client(monkeypatch, nodes=None, pods=None, deployments=None, events=None):
+def _patch_k8s_client(
+    monkeypatch, nodes=None, pods=None, deployments=None, statefulsets=None, daemonsets=None, events=None
+):
     """Patch kubernetes_asyncio.client's Api classes used by _watch_loop."""
     from kubernetes_asyncio import client as kclient
 
@@ -329,6 +383,12 @@ def _patch_k8s_client(monkeypatch, nodes=None, pods=None, deployments=None, even
         async def list_deployment_for_all_namespaces(self):
             return _FakeList(deployments or [])
 
+        async def list_stateful_set_for_all_namespaces(self):
+            return _FakeList(statefulsets or [])
+
+        async def list_daemon_set_for_all_namespaces(self):
+            return _FakeList(daemonsets or [])
+
     monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
     monkeypatch.setattr(kclient, "CoreV1Api", _FakeCoreV1Api)
     monkeypatch.setattr(kclient, "AppsV1Api", _FakeAppsV1Api)
@@ -340,6 +400,8 @@ def _patch_k8s_client(monkeypatch, nodes=None, pods=None, deployments=None, even
         ("nodes", "nodes", _node_obj(), _node_obj(name="pi-2")),
         ("pods", "pods", _pod_obj(), _pod_obj(name="p2")),
         ("deployments", "deployments", _deployment_obj(), _deployment_obj(name="d2")),
+        ("statefulsets", "statefulsets", _statefulset_obj(), _statefulset_obj(name="s2")),
+        ("daemonsets", "daemonsets", _daemonset_obj(), _daemonset_obj(name="ds2")),
         ("events", "events", _event_obj(), _event_obj(uid="e2")),
     ],
 )
@@ -467,7 +529,7 @@ def test_watch_loop_backoff_grows_across_repeated_failures(monkeypatch):
     assert sleep_calls == [1, 2]
 
 
-def test_run_starts_all_four_watch_loops(monkeypatch):
+def test_run_starts_all_six_watch_loops(monkeypatch):
     from app.collectors import k8s_watch
     from app.state import ClusterState
 
@@ -485,7 +547,7 @@ def test_run_starts_all_four_watch_loops(monkeypatch):
     st = ClusterState()
     asyncio.run(k8s_watch.run(st))
     assert calls[0] == "config"
-    assert set(calls[1:]) == {"nodes", "pods", "deployments", "events"}
+    assert set(calls[1:]) == {"nodes", "pods", "deployments", "statefulsets", "daemonsets", "events"}
 
 
 # ==================================================================

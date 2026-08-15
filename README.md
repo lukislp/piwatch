@@ -21,7 +21,9 @@ cluster involved.
 
 ## Features
 
-- **Kubernetes live**: nodes, pods, deployments, events via the watch API (no polling)
+- **Kubernetes live**: nodes, pods, deployments, StatefulSets, DaemonSets, events via the watch
+  API (no polling). StatefulSets/DaemonSets get their own rollout-in-progress indicator, from
+  their own native status fields (no pod-naming heuristic needed there, unlike Deployments)
 - **Rollout drift detection**: flags a Deployment when its replicas haven't all updated yet, or
   are running different image tags (best-effort pod-to-Deployment match by naming convention --
   PiWatch doesn't watch ReplicaSets/ownerReferences)

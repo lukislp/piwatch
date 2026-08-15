@@ -230,6 +230,19 @@ export interface PvcInfo {
   usage_pct?: number | null;
 }
 
+export interface OrphanedPvInfo {
+  key: string;
+  name: string;
+  /** Always "Released" or "Failed" -- the only phases the backend surfaces here. */
+  phase?: string | null;
+  capacity?: string | null;
+  storage_class?: string | null;
+  reclaim_policy?: string | null;
+  /** The PVC that used to claim this volume, for context on what it was for. */
+  claim_namespace?: string | null;
+  claim_name?: string | null;
+}
+
 export interface GatewayInfo {
   key: string;
   name: string;
@@ -273,6 +286,7 @@ export interface Snapshot {
   statefulsets: Record<string, StatefulSetInfo>;
   daemonsets: Record<string, DaemonSetInfo>;
   services: Record<string, ServiceInfo>;
+  orphaned_pvs: Record<string, OrphanedPvInfo>;
   events: EventInfo[];
   node_metrics: Record<string, NodeMetrics>;
   hardware: Record<string, NodeMetrics>;

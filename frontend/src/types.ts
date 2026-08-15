@@ -56,6 +56,7 @@ export interface NodeMetrics {
   mem_pct?: number;
   temp_c?: number;
   cpu_cores?: number;
+  mem_bytes?: number;
   disk_used_pct?: number;
   load1?: number;
   uptime_s?: number;

@@ -35,6 +35,8 @@ cluster involved.
   throughput charts. Plus the Pi firmware's under-voltage (bad PSU/PoE) flag, surfaced as a
   plain OK/error indicator on the Overview page
 - **Metrics**: CPU/RAM usage via metrics-server (bundled with k3s), ~3h history
+- **Cluster capacity overview**: two Overview tiles showing total CPU cores and RAM used
+  vs. allocatable across all nodes, so you can see headroom before a pod fails to schedule
 - **Network throughput** per node (RX/TX), summed across physical interfaces only
 - **GitOps sync status** (optional): if you run [Flux](https://fluxcd.io/), a "GitOps" card on the
   Overview page shows each Kustomization's Ready condition, last applied revision, managed

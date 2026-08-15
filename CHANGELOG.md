@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/lukislp/piwatch/compare/v1.13.0...v1.14.0) (2026-08-15)
+
+
+### Features
+
+* show Gateway API routing status on the Overview page ([0c30cf7](https://github.com/lukislp/piwatch/commit/0c30cf7e162162dccb8e9ce5fc58f09915c8b17b))
+
 # [1.13.0](https://github.com/lukislp/piwatch/compare/v1.12.0...v1.13.0) (2026-08-15)
 
 

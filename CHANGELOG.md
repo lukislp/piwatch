@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/lukislp/piwatch/compare/v1.15.0...v1.16.0) (2026-08-15)
+
+
+### Features
+
+* show LoadBalancer Service status on the Overview page ([19e83f6](https://github.com/lukislp/piwatch/commit/19e83f6f0dd0a7bde37d4666bbf272a9ab412577))
+
 # [1.15.0](https://github.com/lukislp/piwatch/compare/v1.14.0...v1.15.0) (2026-08-15)
 
 

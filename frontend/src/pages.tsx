@@ -409,6 +409,60 @@ function rolloutDrift(dep: DeploymentInfo, pods: PodInfo[]): string | null {
   return null;
 }
 
+function pvcUsageColor(pct: number): string {
+  if (pct >= 90) return STATUS.critical;
+  if (pct >= 75) return STATUS.warning;
+  return STATUS.good;
+}
+
+// Hidden entirely when empty, same reasoning as GitOpsStatus: most clusters
+// this dashboard runs against don't necessarily use PVCs (e.g. hostPath-only
+// setups), so an empty "Storage" card would just be clutter.
+function Storage({ snap }: { snap: Snapshot }) {
+  const pvcs = Object.values(snap.pvcs).sort((a, b) => a.key.localeCompare(b.key));
+  if (pvcs.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Storage (PVCs)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Claim</th>
+            <th>Namespace</th>
+            <th>Status</th>
+            <th>Storage class</th>
+            <th className="num">Capacity</th>
+            <th className="num">Usage</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pvcs.map((p) => (
+            <tr key={p.key}>
+              <td>
+                <Dot color={p.phase === "Bound" ? STATUS.good : STATUS.warning} />
+                {p.name}
+              </td>
+              <td className="muted">{p.namespace}</td>
+              <td className="muted">{p.phase ?? "–"}</td>
+              <td className="muted">{p.storage_class ?? "–"}</td>
+              <td className="num muted">{fmtBytes(p.capacity_bytes ?? p.requested_bytes ?? undefined)}</td>
+              <td className="num" title={p.usage_pct == null ? "Set PIWATCH_PROMETHEUS_URL to see usage" : undefined}>
+                {p.usage_pct != null ? (
+                  <span style={{ color: pvcUsageColor(p.usage_pct) }}>
+                    {p.usage_pct.toFixed(0)}% ({fmtBytes(p.usage_bytes ?? undefined)})
+                  </span>
+                ) : (
+                  <span className="muted">–</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const deps = Object.values(snap.deployments).sort((a, b) => a.key.localeCompare(b.key));
   const pods = Object.values(snap.pods).sort((a, b) => a.key.localeCompare(b.key));
@@ -468,6 +522,7 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
           </tbody>
         </table>
       </div>
+      <Storage snap={snap} />
     </>
   );
 }

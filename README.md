@@ -43,6 +43,10 @@ cluster involved.
   card shows each image policy's latest/previous tag and scan time plus each automation's last
   run and last Git push. Not a hard dependency -- stays hidden if Flux (or image automation)
   isn't installed
+- **PVC storage usage**: a "Storage" card on the Workloads page lists every PersistentVolumeClaim
+  with its status, storage class and capacity. Usage % additionally needs
+  [Prometheus](https://prometheus.io/) scraping kubelet (set `PIWATCH_PROMETHEUS_URL`) -- without
+  it, the card still shows capacity/binding metadata, just no usage column
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Live logs** for any pod, right in the browser
 - **Simple auth**: password from a Kubernetes Secret, signed tokens (failover-friendly)
@@ -156,6 +160,7 @@ cd backend && python -m pytest tests/
 | `PIWATCH_DEMO` | `1` = demo mode with fake data | – |
 | `PIWATCH_CHECKS_FILE` | Path to the healthcheck YAML | `/config/healthchecks.yaml` |
 | `PIWATCH_AGENT_SERVICE` | Headless service for the node-agents | `piwatch-node-agent.monitoring…` |
+| `PIWATCH_PROMETHEUS_URL` | Prometheus base URL, for PVC usage % (optional) | – |
 
 ## Deliberate simplifications
 

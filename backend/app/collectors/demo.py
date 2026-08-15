@@ -28,6 +28,13 @@ PODS = [
     ("home", "node-red-59fd7", "pi-worker-2", "nodered/node-red:3"),
 ]
 
+# (namespace, name, storage class, requested bytes, access modes)
+PVCS = [
+    ("home", "home-assistant-config", "local-path", 5 * 1024**3, ["ReadWriteOnce"]),
+    ("home", "mosquitto-data", "local-path", 1 * 1024**3, ["ReadWriteOnce"]),
+    ("home", "node-red-data", "local-path", 2 * 1024**3, ["ReadWriteOnce"]),
+]
+
 EVENT_SAMPLES = [
     ("Normal", "Pulled", "Container image already present on machine"),
     ("Normal", "Scheduled", "Successfully assigned pod to node"),
@@ -225,6 +232,35 @@ async def run(state: ClusterState):
 
     _seed_flux()
 
+    # --- PVC storage: static capacity/binding metadata + a slowly-drifting usage % per
+    # claim, as if PIWATCH_PROMETHEUS_URL were configured against a real kubelet ---
+    pvc_static = {
+        f"{ns}/{name}": {
+            "key": f"{ns}/{name}",
+            "name": name,
+            "namespace": ns,
+            "phase": "Bound",
+            "storage_class": sc,
+            "access_modes": modes,
+            "volume_name": f"pvc-demo-{name}",
+            "requested_bytes": requested,
+            "capacity_bytes": requested,
+        }
+        for ns, name, sc, requested, modes in PVCS
+    }
+    pvc_usage = {f"{ns}/{name}": _Walker(rng.uniform(10, 60), 5, 92, 1.5) for ns, name, *_ in PVCS}
+
+    def _tick_pvcs():
+        items = {}
+        for key, static in pvc_static.items():
+            pct = pvc_usage[key].next()
+            items[key] = {
+                **static,
+                "usage_pct": pct,
+                "usage_bytes": int(static["capacity_bytes"] * pct / 100),
+            }
+        state.set_pvcs(items)
+
     # --- walkers per node ---
     cpu = {n: _Walker(rng.uniform(15, 45), 2, 95, 6) for n in NODES}
     mem = {n: _Walker(rng.uniform(35, 60), 20, 90, 2) for n in NODES}
@@ -310,6 +346,7 @@ async def run(state: ClusterState):
         # keep the GitOps countdown correct if a demo session runs past one full cycle
         if tick % 12 == 0:
             _seed_flux()
+        _tick_pvcs()
         # occasionally emit an event / a pod restart
         if tick % 6 == 0:
             etype, reason, msg = rng.choice(EVENT_SAMPLES)

@@ -55,6 +55,11 @@ class ClusterState:
         self.flux_image_policies: dict[str, dict[str, Any]] = {}
         self.flux_image_automations: dict[str, dict[str, Any]] = {}
 
+        # PersistentVolumeClaims (ns/name -> mapped dict). Capacity/binding metadata is
+        # always populated; usage_bytes/usage_pct stay None unless PIWATCH_PROMETHEUS_URL
+        # is set -- see collectors/pvc.py.
+        self.pvcs: dict[str, dict[str, Any]] = {}
+
         self._subscribers: set[asyncio.Queue] = set()
 
     # ---------------- pub/sub ----------------
@@ -165,6 +170,11 @@ class ClusterState:
         self.flux_image_automations = items
         self.publish("flux_image_automations", items)
 
+    def set_pvcs(self, items: dict[str, dict]) -> None:
+        """Full replace on every poll, same reasoning as set_flux_kustomizations."""
+        self.pvcs = items
+        self.publish("pvcs", items)
+
     def record_check(self, name: str, config: dict, ok: bool, latency_ms: float | None, detail: str = "") -> None:
         entry = self.healthchecks.setdefault(
             name, {"config": config, "history": deque(maxlen=CHECK_HISTORY_LEN)}
@@ -196,6 +206,7 @@ class ClusterState:
             "flux_git_repositories": self.flux_git_repositories,
             "flux_image_policies": self.flux_image_policies,
             "flux_image_automations": self.flux_image_automations,
+            "pvcs": self.pvcs,
             "node_history": {k: list(v) for k, v in self.node_history.items()},
             "healthchecks": {
                 name: {

@@ -32,6 +32,7 @@ class ClusterState:
         self.deployments: dict[str, dict[str, Any]] = {}  # key: ns/name
         self.statefulsets: dict[str, dict[str, Any]] = {}  # key: ns/name
         self.daemonsets: dict[str, dict[str, Any]] = {}    # key: ns/name
+        self.services: dict[str, dict[str, Any]] = {}      # key: ns/name; LoadBalancer-type only
         self.events: deque[dict[str, Any]] = deque(maxlen=EVENTS_LEN)
 
         # Hardware + metrics per node (latest sample)
@@ -137,6 +138,14 @@ class ClusterState:
         self.daemonsets.pop(key, None)
         self.publish("daemonset_deleted", {"key": key})
 
+    def upsert_service(self, key: str, obj: dict) -> None:
+        self.services[key] = obj
+        self.publish("service", obj)
+
+    def remove_service(self, key: str) -> None:
+        self.services.pop(key, None)
+        self.publish("service_deleted", {"key": key})
+
     def add_event(self, obj: dict) -> None:
         self.events.append(obj)
         self.publish("event", obj)
@@ -231,6 +240,7 @@ class ClusterState:
             "deployments": self.deployments,
             "statefulsets": self.statefulsets,
             "daemonsets": self.daemonsets,
+            "services": self.services,
             "events": list(self.events),
             "node_metrics": self.node_metrics,
             "hardware": self.hardware,

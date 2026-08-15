@@ -142,6 +142,24 @@ def map_daemonset(d) -> dict:
     }
 
 
+def map_service(s) -> dict:
+    lb = s.status.load_balancer if s.status else None
+    ingress = (lb.ingress if lb else None) or []
+    external_ips = [addr for addr in (i.ip or i.hostname for i in ingress) if addr]
+    return {
+        "key": f"{s.metadata.namespace}/{s.metadata.name}",
+        "name": s.metadata.name,
+        "namespace": s.metadata.namespace,
+        "type": s.spec.type,
+        "cluster_ip": s.spec.cluster_ip,
+        "external_ips": external_ips,
+        "ports": [
+            {"port": p.port, "protocol": p.protocol, "name": p.name}
+            for p in (s.spec.ports or [])
+        ],
+    }
+
+
 def map_event(e) -> dict:
     ts = e.last_timestamp or e.event_time or e.metadata.creation_timestamp
     return {
@@ -179,6 +197,8 @@ async def _watch_loop(state: ClusterState, kind: str):
                     lister, mapper = apps.list_stateful_set_for_all_namespaces, map_statefulset
                 elif kind == "daemonsets":
                     lister, mapper = apps.list_daemon_set_for_all_namespaces, map_daemonset
+                elif kind == "services":
+                    lister, mapper = v1.list_service_for_all_namespaces, map_service
                 elif kind == "events":
                     lister, mapper = v1.list_event_for_all_namespaces, map_event
                 else:
@@ -216,6 +236,15 @@ def _apply(state: ClusterState, kind: str, ev_type: str, obj: dict) -> None:
         state.remove_statefulset(obj["key"]) if deleted else state.upsert_statefulset(obj["key"], obj)
     elif kind == "daemonsets":
         state.remove_daemonset(obj["key"]) if deleted else state.upsert_daemonset(obj["key"], obj)
+    elif kind == "services":
+        # Only LoadBalancer-type services are worth surfacing (ClusterIP/NodePort don't
+        # have an external-address-pending state to watch for) -- a Service that stops
+        # being LoadBalancer (rare, but possible on edit) must be actively removed, not
+        # just left stale, since it'd otherwise never get another upsert to replace it.
+        if deleted or obj["type"] != "LoadBalancer":
+            state.remove_service(obj["key"])
+        else:
+            state.upsert_service(obj["key"], obj)
     elif kind == "events" and not deleted:
         state.add_event(obj)
 
@@ -229,5 +258,6 @@ async def run(state: ClusterState):
         _watch_loop(state, "deployments"),
         _watch_loop(state, "statefulsets"),
         _watch_loop(state, "daemonsets"),
+        _watch_loop(state, "services"),
         _watch_loop(state, "events"),
     )

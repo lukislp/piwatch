@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/lukislp/piwatch/compare/v1.2.0...v1.3.0) (2026-08-15)
+
+
+### Features
+
+* monitor NVMe SSD health and Pi under-voltage on the PoE+ M.2 HAT ([c02f7d5](https://github.com/lukislp/piwatch/commit/c02f7d5c4991fe4333778ef2924260593f2bbdd9))
+
 # [1.2.0](https://github.com/lukislp/piwatch/compare/v1.1.3...v1.2.0) (2026-08-15)
 
 

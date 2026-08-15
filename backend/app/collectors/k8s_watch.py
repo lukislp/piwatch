@@ -160,6 +160,41 @@ def map_service(s) -> dict:
     }
 
 
+def map_hpa(h) -> dict:
+    target = h.spec.scale_target_ref
+    conditions = {c.type: c.status for c in (h.status.conditions or [])}
+    # Only Resource-type metrics (CPU/memory utilization) are summarized -- by far the
+    # common case, and the only one with a simple scalar percentage to show. Pods/Object/
+    # External metrics exist on the real API but don't have a universal "target %" shape
+    # to render generically; an HPA using only those just shows an empty metrics list here.
+    metrics = [
+        {"name": m.resource.name, "target_pct": m.resource.target.average_utilization}
+        for m in (h.spec.metrics or [])
+        if m.type == "Resource" and m.resource and m.resource.target
+    ]
+    current_metrics = [
+        {"name": m.resource.name, "current_pct": m.resource.current.average_utilization}
+        for m in (h.status.current_metrics or [])
+        if m.type == "Resource" and m.resource and m.resource.current
+    ]
+    return {
+        "key": f"{h.metadata.namespace}/{h.metadata.name}",
+        "name": h.metadata.name,
+        "namespace": h.metadata.namespace,
+        "target_kind": target.kind if target else None,
+        "target_name": target.name if target else None,
+        "min_replicas": h.spec.min_replicas,
+        "max_replicas": h.spec.max_replicas,
+        "current_replicas": h.status.current_replicas or 0,
+        "desired_replicas": h.status.desired_replicas or 0,
+        "metrics": metrics,
+        "current_metrics": current_metrics,
+        "able_to_scale": conditions.get("AbleToScale"),
+        "scaling_active": conditions.get("ScalingActive"),
+        "scaling_limited": conditions.get("ScalingLimited"),
+    }
+
+
 def map_pv(v) -> dict:
     claim_ref = v.spec.claim_ref
     return {
@@ -200,6 +235,7 @@ async def _watch_loop(state: ClusterState, kind: str):
             async with client.ApiClient() as api_client:
                 v1 = client.CoreV1Api(api_client)
                 apps = client.AppsV1Api(api_client)
+                autoscaling = client.AutoscalingV2Api(api_client)
 
                 if kind == "nodes":
                     lister, mapper = v1.list_node, map_node
@@ -213,6 +249,8 @@ async def _watch_loop(state: ClusterState, kind: str):
                     lister, mapper = apps.list_daemon_set_for_all_namespaces, map_daemonset
                 elif kind == "services":
                     lister, mapper = v1.list_service_for_all_namespaces, map_service
+                elif kind == "hpas":
+                    lister, mapper = autoscaling.list_horizontal_pod_autoscaler_for_all_namespaces, map_hpa
                 elif kind == "persistentvolumes":
                     lister, mapper = v1.list_persistent_volume, map_pv
                 elif kind == "events":
@@ -261,6 +299,8 @@ def _apply(state: ClusterState, kind: str, ev_type: str, obj: dict) -> None:
             state.remove_service(obj["key"])
         else:
             state.upsert_service(obj["key"], obj)
+    elif kind == "hpas":
+        state.remove_hpa(obj["key"]) if deleted else state.upsert_hpa(obj["key"], obj)
     elif kind == "persistentvolumes":
         # Only "Released"/"Failed" PVs are orphaned/need-attention -- a PV that gets
         # rebound (rare, but possible) must be actively removed, not left stale, since
@@ -283,6 +323,7 @@ async def run(state: ClusterState):
         _watch_loop(state, "statefulsets"),
         _watch_loop(state, "daemonsets"),
         _watch_loop(state, "services"),
+        _watch_loop(state, "hpas"),
         _watch_loop(state, "persistentvolumes"),
         _watch_loop(state, "events"),
     )

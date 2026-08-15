@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NodeChart, Dot, StatusBadge, Tile, useBalancedTileColumns } from "./components";
 import { getToken } from "./store";
 import { STATUS, seriesColor, type Mode } from "./theme";
-import type { DeploymentInfo, PodInfo, Snapshot } from "./types";
+import type { DeploymentInfo, HpaInfo, PodInfo, Snapshot } from "./types";
 
 const fmtAge = (t?: number) => {
   if (!t) return "–";
@@ -508,6 +508,66 @@ function LoadBalancerStatus({ snap }: { snap: Snapshot }) {
   );
 }
 
+// ---------------- Autoscalers (HPA) ----------------
+// Hidden entirely when empty, same reasoning as Storage/OrphanedPvs: not every cluster
+// uses autoscaling.
+// Pairs each metric's current and target reading by name (they arrive as two separate
+// lists from the backend -- current_metrics/metrics -- since that's the shape of the
+// underlying HPA status/spec objects).
+function fmtHpaMetrics(h: HpaInfo): string {
+  return h.metrics
+    .map((target) => {
+      const current = h.current_metrics.find((c) => c.name === target.name);
+      const cur = current?.current_pct != null ? `${current.current_pct}%` : "–";
+      return `${target.name} ${cur}/${target.target_pct}%`;
+    })
+    .join(", ") || "–";
+}
+
+function Autoscalers({ snap }: { snap: Snapshot }) {
+  const hpas = Object.values(snap.hpas).sort((a, b) => a.key.localeCompare(b.key));
+  if (hpas.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Autoscalers</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Namespace</th>
+            <th>Target</th>
+            <th className="num">Replicas</th>
+            <th>Current / Target</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {hpas.map((h) => {
+            const limited = h.scaling_limited === "True";
+            const notActive = h.scaling_active === "False" || h.able_to_scale === "False";
+            const problem = notActive || limited;
+            return (
+              <tr key={h.key}>
+                <td>{h.name}</td>
+                <td className="muted">{h.namespace}</td>
+                <td className="mono muted">{h.target_kind ? `${h.target_kind}/${h.target_name}` : "–"}</td>
+                <td className="num">
+                  {h.current_replicas}/{h.min_replicas ?? "–"}-{h.max_replicas ?? "–"}
+                </td>
+                <td className="mono muted">{fmtHpaMetrics(h)}</td>
+                <td>
+                  <Dot color={!problem ? STATUS.good : notActive ? STATUS.critical : STATUS.warning} />
+                  {!problem ? "OK" : notActive ? "⚠ not scaling" : "⚠ limited"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ---------------- Nodes (charts) ----------------
 export function Nodes({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const mbFormatter = (v: number) => `${v.toFixed(v < 10 ? 1 : 0)} MB/s`;
@@ -865,6 +925,7 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       </div>
       <StatefulSets snap={snap} />
       <DaemonSets snap={snap} />
+      <Autoscalers snap={snap} />
       <div className="card">
         <h2>Pods</h2>
         <table>

@@ -169,6 +169,28 @@ async def run(state: ClusterState):
             },
         )
 
+    # --- seed a HorizontalPodAutoscaler (showcases the Workloads page's Autoscalers
+    # card: actively scaling above min, driven by CPU utilization above target) ---
+    state.upsert_hpa(
+        "home/home-assistant",
+        {
+            "key": "home/home-assistant",
+            "name": "home-assistant",
+            "namespace": "home",
+            "target_kind": "Deployment",
+            "target_name": "home-assistant",
+            "min_replicas": 1,
+            "max_replicas": 4,
+            "current_replicas": 2,
+            "desired_replicas": 2,
+            "metrics": [{"name": "cpu", "target_pct": 70}],
+            "current_metrics": [{"name": "cpu", "current_pct": 82}],
+            "able_to_scale": "True",
+            "scaling_active": "True",
+            "scaling_limited": "False",
+        },
+    )
+
     # --- seed LoadBalancer Services (showcases the Overview page's LoadBalancer status,
     # one healthy with an assigned address, one still Pending) ---
     state.upsert_service(

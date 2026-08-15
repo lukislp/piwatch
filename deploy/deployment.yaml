@@ -29,7 +29,7 @@ spec:
                   matchLabels: {app: piwatch}
       containers:
         - name: piwatch
-          image: ghcr.io/lukislp/piwatch:1.19.0 # {"$imagepolicy": "flux-system:piwatch"}
+          image: ghcr.io/lukislp/piwatch:1.20.0 # {"$imagepolicy": "flux-system:piwatch"}
           # No runAsNonRoot: the image has no USER directive (runs as root) - enforcing it
           # retroactively would crash without an accompanying Dockerfile change (+rebuild).
           # allowPrivilegeEscalation/capabilities are safe independently of that, because the
@@ -60,16 +60,16 @@ spec:
             # k8s/12-network-policies.yaml allow-ingress-to-prometheus for the pattern).
             - name: PIWATCH_PROMETHEUS_URL
               value: http://prometheus.monitoring.svc.cluster.local:9090
-            # Optional (see collectors/history.py): persists node_history to /data/history.db
-            # so the chart window survives a pod restart instead of starting empty, bounded to
-            # PIWATCH_HISTORY_RETENTION_DAYS (default 7) via periodic pruning. Uncomment both to
-            # enable -- left off here since the `history` volume below is hostPath, tied to
-            # whichever node this replica currently runs on (see collectors/history.py's
-            # docstring for why: a shared PVC would conflict with the anti-affinity spread).
-            # - name: PIWATCH_HISTORY_DB
-            #   value: /data/history.db
-            # - name: PIWATCH_HISTORY_RETENTION_DAYS
-            #   value: "7"
+              # Optional (see collectors/history.py): persists node_history to /data/history.db
+              # so the chart window survives a pod restart instead of starting empty, bounded to
+              # PIWATCH_HISTORY_RETENTION_DAYS (default 7) via periodic pruning. Uncomment both to
+              # enable -- left off here since the `history` volume below is hostPath, tied to
+              # whichever node this replica currently runs on (see collectors/history.py's
+              # docstring for why: a shared PVC would conflict with the anti-affinity spread).
+              # - name: PIWATCH_HISTORY_DB
+              #   value: /data/history.db
+              # - name: PIWATCH_HISTORY_RETENTION_DAYS
+              #   value: "7"
           volumeMounts:
             - {name: checks, mountPath: /config, readOnly: true}
             - {name: history, mountPath: /data}

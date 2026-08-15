@@ -12,8 +12,10 @@ real cluster or apiserver.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib
 import os
+import ssl
 import sys
 import types
 from datetime import datetime, timezone
@@ -1782,6 +1784,41 @@ def test_map_http_route_backend_not_resolved():
     assert d["reason"] == "BackendNotFound"
 
 
+def test_map_gateway_extracts_per_listener_hostname_port_protocol():
+    from app.collectors.gateway import _map_gateway
+
+    item = _gateway_obj()
+    item["spec"]["listeners"] = [
+        {"name": "web-heim", "hostname": "app.heim.lan", "port": 443, "protocol": "HTTPS"},
+        {"name": "web-public", "hostname": "app.example.com", "port": 443, "protocol": "HTTPS"},
+    ]
+    d = _map_gateway(item)
+    assert d["listeners"] == [
+        {"name": "web-heim", "hostname": "app.heim.lan", "port": 443, "protocol": "HTTPS"},
+        {"name": "web-public", "hostname": "app.example.com", "port": 443, "protocol": "HTTPS"},
+    ]
+
+
+def test_map_http_route_parent_namespace_defaults_to_own():
+    """No namespace on the parentRef -- defaults to the route's own, per the
+    Gateway API spec (same-namespace references usually omit it)."""
+    from app.collectors.gateway import _map_http_route
+
+    d = _map_http_route(_http_route_obj(namespace="home"))
+    assert d["parent_names"] == ["gw1"]
+    assert d["parent_namespaces"] == ["home"]
+
+
+def test_map_http_route_parent_namespace_explicit_cross_namespace():
+    from app.collectors.gateway import _map_http_route
+
+    item = _http_route_obj(namespace="studylife-scale")
+    item["spec"]["parentRefs"] = [{"name": "gw1", "namespace": "nginx-gateway", "kind": "Gateway"}]
+    d = _map_http_route(item)
+    assert d["parent_names"] == ["gw1"]
+    assert d["parent_namespaces"] == ["nginx-gateway"]
+
+
 def test_map_http_route_no_parent_status_defaults_to_not_accepted():
     """Freshly created, or no matching Gateway found at all -- can't claim
     accepted just because nothing said otherwise."""
@@ -1877,6 +1914,364 @@ def test_gateway_run_backs_off_on_structural_failure(monkeypatch):
         asyncio.run(gateway.run(st))
 
     assert sleep_calls == [gateway.RETRY_INTERVAL]
+
+
+# ==================================================================
+# app.collectors.autochecks
+# ==================================================================
+
+
+def _ac_gateway(namespace="nginx-gateway", name="gw1", listeners=None, addresses=("192.168.1.50",)):
+    return {
+        "key": f"{namespace}/{name}",
+        "namespace": namespace,
+        "name": name,
+        "addresses": list(addresses),
+        "listeners": listeners or [
+            {"name": "web", "hostname": "app.heim.lan", "port": 443, "protocol": "HTTPS"}
+        ],
+    }
+
+
+def _ac_route(
+    namespace="home", name="route1", accepted=True, resolved_refs=True,
+    hostnames=("app.heim.lan",), parent_name="gw1", parent_namespace="nginx-gateway",
+):
+    return {
+        "key": f"{namespace}/{name}",
+        "namespace": namespace,
+        "name": name,
+        "hostnames": list(hostnames),
+        "parent_names": [parent_name],
+        "parent_namespaces": [parent_namespace],
+        "accepted": accepted,
+        "resolved_refs": resolved_refs,
+    }
+
+
+def _ac_service(
+    namespace="nginx-gateway", name="gw1-nginx", cluster_ip="10.43.9.1",
+    external_ips=("192.168.1.50",), ports=None,
+):
+    # Default name deliberately differs from any _ac_gateway's default name (gw1) --
+    # NGINX Gateway Fabric really does name it "<gateway>-nginx", verified live; matching
+    # by name/namespace was tried first and doesn't work, see autochecks.py's docstring.
+    return {
+        "key": f"{namespace}/{name}",
+        "namespace": namespace,
+        "name": name,
+        "cluster_ip": cluster_ip,
+        "external_ips": list(external_ips),
+        "ports": ports if ports is not None else [{"port": 443, "protocol": "TCP", "name": "https"}],
+    }
+
+
+def test_route_checks_builds_check_for_accepted_resolved_route_with_known_gateway():
+    from app.collectors.autochecks import route_checks
+    from app.state import ClusterState
+
+    st = ClusterState()
+    st.gateways = {"nginx-gateway/gw1": _ac_gateway()}
+    st.http_routes = {"home/route1": _ac_route()}
+    st.services = {"nginx-gateway/gw1-nginx": _ac_service()}
+
+    checks = route_checks(st)
+    assert checks["app.heim.lan"] == {
+        "kind": "route",
+        "cluster_ip": "10.43.9.1",
+        "port": 443,
+        "tls": True,
+        "hostname": "app.heim.lan",
+    }
+
+
+def test_route_checks_skips_route_not_accepted_or_not_resolved():
+    from app.collectors.autochecks import route_checks
+    from app.state import ClusterState
+
+    st = ClusterState()
+    st.gateways = {"nginx-gateway/gw1": _ac_gateway()}
+    st.services = {"nginx-gateway/gw1-nginx": _ac_service()}
+
+    st.http_routes = {"home/route1": _ac_route(accepted=False)}
+    assert route_checks(st) == {}
+
+    st.http_routes = {"home/route1": _ac_route(resolved_refs=False)}
+    assert route_checks(st) == {}
+
+
+def test_route_checks_skips_when_gateway_unknown():
+    from app.collectors.autochecks import route_checks
+    from app.state import ClusterState
+
+    st = ClusterState()
+    st.http_routes = {"home/route1": _ac_route()}
+    assert route_checks(st) == {}
+
+
+def test_route_checks_skips_when_no_service_shares_the_gateway_address():
+    """No Service's external_ips intersects the Gateway's own addresses (e.g. the
+    Gateway isn't backed by a LoadBalancer-type Service yet, or none at all exists)
+    -- can't reach it without an IP, so this route just doesn't get auto-checked."""
+    from app.collectors.autochecks import route_checks
+    from app.state import ClusterState
+
+    st = ClusterState()
+    st.gateways = {"nginx-gateway/gw1": _ac_gateway()}
+    st.http_routes = {"home/route1": _ac_route()}
+    assert route_checks(st) == {}
+
+    # a Service exists but its external_ips don't overlap the Gateway's addresses
+    st.services = {"nginx-gateway/gw1-nginx": _ac_service(external_ips=("192.168.1.99",))}
+    assert route_checks(st) == {}
+
+
+def test_route_checks_falls_back_to_hostname_less_listener():
+    from app.collectors.autochecks import route_checks
+    from app.state import ClusterState
+
+    st = ClusterState()
+    st.gateways = {
+        "nginx-gateway/gw1": _ac_gateway(
+            listeners=[{"name": "web", "hostname": None, "port": 8080, "protocol": "HTTP"}]
+        )
+    }
+    st.http_routes = {"home/route1": _ac_route(hostnames=("anything.example.com",))}
+    st.services = {"nginx-gateway/gw1-nginx": _ac_service()}
+
+    checks = route_checks(st)
+    assert checks["anything.example.com"]["port"] == 8080
+    assert checks["anything.example.com"]["tls"] is False
+
+
+def test_service_checks_builds_tcp_check_per_port():
+    from app.collectors.autochecks import service_checks
+    from app.state import ClusterState
+
+    st = ClusterState()
+    st.services = {
+        "home/mosquitto-mqtt": _ac_service(
+            namespace="home", name="mosquitto-mqtt", cluster_ip="10.43.9.2",
+            ports=[{"port": 1883, "protocol": "TCP", "name": "mqtt"}],
+        )
+    }
+    checks = service_checks(st)
+    assert checks["home/mosquitto-mqtt:1883"] == {
+        "kind": "service",
+        "cluster_ip": "10.43.9.2",
+        "port": 1883,
+        "service_ref": "home/mosquitto-mqtt",
+    }
+
+
+def test_service_checks_skips_service_without_cluster_ip():
+    from app.collectors.autochecks import service_checks
+    from app.state import ClusterState
+
+    st = ClusterState()
+    st.services = {"home/svc": _ac_service(cluster_ip=None)}
+    assert service_checks(st) == {}
+
+
+class _FakeAcWriter:
+    def __init__(self):
+        self.written = b""
+        self.closed = False
+
+    def write(self, data):
+        self.written += data
+
+    async def drain(self):
+        pass
+
+    def close(self):
+        self.closed = True
+
+    async def wait_closed(self):
+        pass
+
+
+class _FakeAcReader:
+    def __init__(self, line: bytes):
+        self._line = line
+
+    async def readline(self):
+        return self._line
+
+
+def test_probe_route_https_sends_correct_sni_and_host_header(monkeypatch):
+    from app.collectors import autochecks
+
+    captured = {}
+    writer = _FakeAcWriter()
+
+    async def fake_open_connection(host, port, **kwargs):
+        captured["host"] = host
+        captured["port"] = port
+        captured["kwargs"] = kwargs
+        return _FakeAcReader(b"HTTP/1.1 200 OK\r\n"), writer
+
+    monkeypatch.setattr(autochecks.asyncio, "open_connection", fake_open_connection)
+
+    async def scenario():
+        return await autochecks._probe_route("10.43.9.1", 443, "app.heim.lan", tls=True)
+
+    ok, ms, detail = asyncio.run(scenario())
+    assert ok is True
+    assert detail == "HTTP 200"
+    assert ms is not None
+    assert captured["host"] == "10.43.9.1"
+    assert captured["port"] == 443
+    assert captured["kwargs"]["server_hostname"] == "app.heim.lan"
+    assert isinstance(captured["kwargs"]["ssl"], ssl.SSLContext)
+    assert b"Host: app.heim.lan\r\n" in writer.written
+    assert writer.closed is True
+
+
+def test_probe_route_http_skips_tls_kwargs(monkeypatch):
+    from app.collectors import autochecks
+
+    captured = {}
+    writer = _FakeAcWriter()
+
+    async def fake_open_connection(host, port, **kwargs):
+        captured["kwargs"] = kwargs
+        return _FakeAcReader(b"HTTP/1.1 404 Not Found\r\n"), writer
+
+    monkeypatch.setattr(autochecks.asyncio, "open_connection", fake_open_connection)
+
+    async def scenario():
+        return await autochecks._probe_route("10.43.9.1", 8080, "app.heim.lan", tls=False)
+
+    ok, _ms, detail = asyncio.run(scenario())
+    assert ok is False  # 404 >= 400
+    assert detail == "HTTP 404"
+    assert "ssl" not in captured["kwargs"]
+    assert "server_hostname" not in captured["kwargs"]
+
+
+def test_probe_route_connection_error_reports_exception_type(monkeypatch):
+    from app.collectors import autochecks
+
+    async def fake_open_connection(host, port, **kwargs):
+        raise ConnectionRefusedError()
+
+    monkeypatch.setattr(autochecks.asyncio, "open_connection", fake_open_connection)
+
+    async def scenario():
+        return await autochecks._probe_route("10.43.9.1", 443, "app.heim.lan", tls=True)
+
+    ok, ms, detail = asyncio.run(scenario())
+    assert ok is False
+    assert ms is None
+    assert detail == "ConnectionRefusedError"
+
+
+def test_probe_route_malformed_status_line_reports_no_response(monkeypatch):
+    from app.collectors import autochecks
+
+    writer = _FakeAcWriter()
+
+    async def fake_open_connection(host, port, **kwargs):
+        return _FakeAcReader(b""), writer
+
+    monkeypatch.setattr(autochecks.asyncio, "open_connection", fake_open_connection)
+
+    async def scenario():
+        return await autochecks._probe_route("10.43.9.1", 443, "app.heim.lan", tls=False)
+
+    ok, _ms, detail = asyncio.run(scenario())
+    assert ok is False
+    assert detail == "no response"
+
+
+def test_probe_service_reports_tcp_open_against_a_real_local_server():
+    """Note: deliberately doesn't await server.wait_closed() -- with a
+    connection handler that never explicitly closes its writer, wait_closed()
+    blocks on that still-open connection instead of just the listening socket.
+    close() alone already stops accepting immediately, which is all this
+    test needs."""
+    from app.collectors import autochecks
+
+    async def handle(_reader, writer):
+        writer.close()
+
+    async def scenario():
+        server = await asyncio.start_server(handle, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        try:
+            return await autochecks._probe_service("127.0.0.1", port)
+        finally:
+            server.close()
+
+    ok, ms, detail = asyncio.run(scenario())
+    assert ok is True
+    assert detail == "TCP open"
+    assert ms is not None
+
+
+def test_probe_service_connection_refused_reports_not_ok():
+    from app.collectors import autochecks
+
+    async def scenario():
+        # Bind then immediately close, to get a genuinely refused local port.
+        server = await asyncio.start_server(lambda r, w: None, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        server.close()
+        return await autochecks._probe_service("127.0.0.1", port)
+
+    ok, ms, _detail = asyncio.run(scenario())
+    assert ok is False
+    assert ms is None
+
+
+def test_autochecks_run_disabled_without_env_var_returns_immediately(monkeypatch):
+    from app.collectors import autochecks
+    from app.state import ClusterState
+
+    monkeypatch.delenv("PIWATCH_AUTO_HEALTHCHECKS", raising=False)
+    st = ClusterState()
+    asyncio.run(autochecks.run(st))  # must return promptly, not hang
+    assert st.healthchecks == {}
+
+
+def test_autochecks_run_starts_and_removes_checks_as_state_changes(monkeypatch):
+    """Integration-style, real (short) timers: enabling the feature and seeding
+    one Service target lets its check run at least once; removing the target
+    then makes it disappear from state.healthchecks -- the dynamic (not
+    load-once) lifecycle this collector exists for."""
+    from app.collectors import autochecks
+    from app.state import ClusterState
+
+    monkeypatch.setenv("PIWATCH_AUTO_HEALTHCHECKS", "1")
+    monkeypatch.setattr(autochecks, "POLL_INTERVAL", 0.01)
+    monkeypatch.setattr(autochecks, "CHECK_INTERVAL", 0.01)
+
+    async def fake_probe_service(cluster_ip, port):
+        return True, 1.0, "TCP open"
+
+    monkeypatch.setattr(autochecks, "_probe_service", fake_probe_service)
+
+    st = ClusterState()
+    st.services = {
+        "home/svc": _ac_service(namespace="home", name="svc", cluster_ip="10.0.0.1",
+                                 ports=[{"port": 80, "protocol": "TCP", "name": "http"}])
+    }
+
+    async def scenario():
+        task = asyncio.create_task(autochecks.run(st))
+        await asyncio.sleep(0.1)
+        assert "home/svc:80" in st.healthchecks
+
+        st.services = {}
+        await asyncio.sleep(0.1)
+        assert "home/svc:80" not in st.healthchecks
+
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
 
 
 # ==================================================================
@@ -2205,6 +2600,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
     monkeypatch.setattr(main_mod.flux, "run", fake_collector)
     monkeypatch.setattr(main_mod.pvc, "run", fake_collector)
     monkeypatch.setattr(main_mod.gateway, "run", fake_collector)
+    monkeypatch.setattr(main_mod.autochecks, "run", fake_collector)
 
     from fastapi.testclient import TestClient
 
@@ -2214,7 +2610,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
         r = client.get("/readyz")
         assert r.status_code == 503
         assert r.json() == {"ready": False}
-    assert len(started) == 6  # k8s_watch, metrics, hardware, flux, pvc, gateway all launched
+    assert len(started) == 7  # k8s_watch, metrics, hardware, flux, pvc, gateway, autochecks
 
 
 def test_get_state_endpoint_returns_snapshot(monkeypatch, tmp_path):

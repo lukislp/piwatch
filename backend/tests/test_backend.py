@@ -136,6 +136,28 @@ def test_healthcheck_uptime_calculation():
     asyncio.run(scenario())
 
 
+def test_remove_check_deletes_and_publishes_only_when_present():
+    from app.state import ClusterState
+
+    async def scenario():
+        st = ClusterState()
+        q = st.subscribe()
+        st.record_check("svc", {"name": "svc"}, True, 5.0)
+        q.get_nowait()  # drain the "healthcheck" publish from record_check above
+
+        st.remove_check("svc")
+        assert "svc" not in st.healthchecks
+        msg = q.get_nowait()
+        assert msg["type"] == "healthcheck_deleted"
+        assert msg["data"] == {"name": "svc"}
+
+        # a second removal (already gone) must not publish again
+        st.remove_check("svc")
+        assert q.empty()
+
+    asyncio.run(scenario())
+
+
 # ---------------- kubernetes quantity parsers ----------------
 
 @pytest.mark.parametrize(

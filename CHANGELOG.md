@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/lukislp/piwatch/compare/v1.18.3...v1.19.0) (2026-08-15)
+
+
+### Features
+
+* show HorizontalPodAutoscaler status on the Workloads page ([e44e368](https://github.com/lukislp/piwatch/commit/e44e368382ff9380068a6892ca56885864a77713))
+
 ## [1.18.3](https://github.com/lukislp/piwatch/compare/v1.18.2...v1.18.3) (2026-08-15)
 
 

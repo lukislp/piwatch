@@ -11,7 +11,7 @@ metadata:
   name: piwatch-readonly
 rules:
   - apiGroups: [""]
-    resources: [nodes, pods, events, services]
+    resources: [nodes, pods, events, services, persistentvolumeclaims]
     verbs: [get, list, watch]
   - apiGroups: [""]
     resources: [pods/log]

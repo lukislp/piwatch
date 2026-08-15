@@ -1024,6 +1024,273 @@ def test_flux_run_polls_and_publishes_all_resource_kinds(monkeypatch):
 
 
 # ==================================================================
+# app.collectors.pvc
+# ==================================================================
+
+
+def _pvc_obj(
+    name="home-assistant-config", namespace="home", requested="5Gi", capacity="5Gi",
+    storage_class="local-path", access_modes=None, volume_name="pvc-abc123", phase="Bound",
+    has_resources=True,
+):
+    metadata = types.SimpleNamespace(name=name, namespace=namespace)
+    resources = types.SimpleNamespace(requests={"storage": requested}) if has_resources else None
+    spec = types.SimpleNamespace(
+        resources=resources,
+        storage_class_name=storage_class,
+        access_modes=access_modes if access_modes is not None else ["ReadWriteOnce"],
+        volume_name=volume_name,
+    )
+    status = types.SimpleNamespace(phase=phase, capacity={"storage": capacity} if capacity else None)
+    return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
+
+
+def test_map_pvc_extracts_capacity_and_binding_metadata():
+    from app.collectors.pvc import map_pvc
+
+    d = map_pvc(_pvc_obj())
+    assert d["key"] == "home/home-assistant-config"
+    assert d["namespace"] == "home"
+    assert d["phase"] == "Bound"
+    assert d["storage_class"] == "local-path"
+    assert d["access_modes"] == ["ReadWriteOnce"]
+    assert d["volume_name"] == "pvc-abc123"
+    assert d["requested_bytes"] == 5 * 1024**3
+    assert d["capacity_bytes"] == 5 * 1024**3
+    assert d["usage_bytes"] is None
+    assert d["usage_pct"] is None
+
+
+def test_map_pvc_pending_with_no_bound_capacity_yet():
+    from app.collectors.pvc import map_pvc
+
+    d = map_pvc(_pvc_obj(phase="Pending", capacity=None))
+    assert d["phase"] == "Pending"
+    assert d["requested_bytes"] == 5 * 1024**3
+    assert d["capacity_bytes"] is None
+
+
+def test_map_pvc_no_resources_spec_defaults_requested_to_none():
+    from app.collectors.pvc import map_pvc
+
+    d = map_pvc(_pvc_obj(has_resources=False))
+    assert d["requested_bytes"] is None
+
+
+class _FakePromResponse:
+    def __init__(self, data):
+        self._data = data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._data
+
+
+def _prom_vector(entries):
+    """entries: list of (namespace, pvc, value)."""
+    return {
+        "data": {
+            "result": [
+                {"metric": {"namespace": ns, "persistentvolumeclaim": pvc}, "value": [1700000000, str(v)]}
+                for ns, pvc, v in entries
+            ]
+        }
+    }
+
+
+def test_query_prometheus_parses_vector_result_into_key_value_map(monkeypatch):
+    import httpx
+
+    from app.collectors.pvc import _query_prometheus
+
+    async def fake_get(_self, _url, params=None, **_kw):
+        return _FakePromResponse(_prom_vector([("home", "mosquitto-data", 12345.6)]))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    async def scenario():
+        async with httpx.AsyncClient() as client:
+            return await _query_prometheus(client, "http://prom:9090", "some_query")
+
+    result = asyncio.run(scenario())
+    assert result == {"home/mosquitto-data": pytest.approx(12345.6)}
+
+
+def test_query_prometheus_skips_entries_missing_labels_or_unparsable_value(monkeypatch):
+    import httpx
+
+    from app.collectors.pvc import _query_prometheus
+
+    data = {
+        "data": {
+            "result": [
+                {"metric": {"namespace": "home"}, "value": [1700000000, "1"]},  # missing pvc label
+                {"metric": {"namespace": "home", "persistentvolumeclaim": "x"}, "value": [1700000000, "not-a-number"]},
+                {"metric": {"namespace": "home", "persistentvolumeclaim": "ok"}, "value": [1700000000, "42"]},
+            ]
+        }
+    }
+
+    async def fake_get(_self, _url, params=None, **_kw):
+        return _FakePromResponse(data)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    async def scenario():
+        async with httpx.AsyncClient() as client:
+            return await _query_prometheus(client, "http://prom:9090", "some_query")
+
+    result = asyncio.run(scenario())
+    assert result == {"home/ok": pytest.approx(42.0)}
+
+
+def _fake_core_v1_api(items):
+    class _FakeCoreV1Api:
+        def __init__(self, api_client):
+            pass
+
+        async def list_persistent_volume_claim_for_all_namespaces(self):
+            return _FakeList(items)
+
+    return _FakeCoreV1Api
+
+
+def test_pvc_run_publishes_metadata_without_prometheus_configured(monkeypatch):
+    """No PIWATCH_PROMETHEUS_URL set -> metadata-only PVCs, no HTTP calls made."""
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import pvc
+    from app.state import ClusterState
+
+    monkeypatch.delenv("PIWATCH_PROMETHEUS_URL", raising=False)
+    st = ClusterState()
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CoreV1Api", _fake_core_v1_api([_pvc_obj()]))
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(pvc.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(pvc.run(st))
+
+    assert "home/home-assistant-config" in st.pvcs
+    assert st.pvcs["home/home-assistant-config"]["usage_pct"] is None
+    assert sleep_calls == [pvc.POLL_INTERVAL]
+
+
+def test_pvc_run_merges_prometheus_usage_when_configured(monkeypatch):
+    import httpx
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import pvc
+    from app.state import ClusterState
+
+    monkeypatch.setenv("PIWATCH_PROMETHEUS_URL", "http://prom:9090")
+    st = ClusterState()
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CoreV1Api", _fake_core_v1_api([_pvc_obj()]))
+
+    async def fake_get(_self, _url, params=None, **_kw):
+        if "capacity" in params["query"]:
+            return _FakePromResponse(_prom_vector([("home", "home-assistant-config", 5 * 1024**3)]))
+        return _FakePromResponse(_prom_vector([("home", "home-assistant-config", 2 * 1024**3)]))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(pvc.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(pvc.run(st))
+
+    d = st.pvcs["home/home-assistant-config"]
+    assert d["usage_bytes"] == 2 * 1024**3
+    assert d["usage_pct"] == pytest.approx(40.0)
+    assert sleep_calls == [pvc.POLL_INTERVAL]
+
+
+def test_pvc_run_degrades_quietly_when_prometheus_unreachable(monkeypatch):
+    """Prometheus is optional and independent of the PVC listing itself -- an
+    outage there must not affect the PVC metadata poll cadence or crash it."""
+    import httpx
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import pvc
+    from app.state import ClusterState
+
+    monkeypatch.setenv("PIWATCH_PROMETHEUS_URL", "http://prom:9090")
+    st = ClusterState()
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CoreV1Api", _fake_core_v1_api([_pvc_obj()]))
+
+    async def fake_get(_self, _url, params=None, **_kw):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(pvc.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(pvc.run(st))
+
+    d = st.pvcs["home/home-assistant-config"]
+    assert d["usage_pct"] is None
+    assert sleep_calls == [pvc.POLL_INTERVAL]
+
+
+def test_pvc_run_backs_off_on_k8s_listing_failure(monkeypatch):
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import pvc
+    from app.state import ClusterState
+
+    monkeypatch.delenv("PIWATCH_PROMETHEUS_URL", raising=False)
+    st = ClusterState()
+
+    class _BrokenCoreV1Api:
+        def __init__(self, api_client):
+            pass
+
+        async def list_persistent_volume_claim_for_all_namespaces(self):
+            raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CoreV1Api", _BrokenCoreV1Api)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(pvc.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(pvc.run(st))
+
+    assert st.pvcs == {}
+    assert sleep_calls == [pvc.RETRY_INTERVAL]
+
+
+# ==================================================================
 # app.ws
 # ==================================================================
 
@@ -1347,6 +1614,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
     monkeypatch.setattr(main_mod.metrics, "run", fake_collector)
     monkeypatch.setattr(main_mod.hardware, "run", fake_collector)
     monkeypatch.setattr(main_mod.flux, "run", fake_collector)
+    monkeypatch.setattr(main_mod.pvc, "run", fake_collector)
 
     from fastapi.testclient import TestClient
 
@@ -1356,7 +1624,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
         r = client.get("/readyz")
         assert r.status_code == 503
         assert r.json() == {"ready": False}
-    assert len(started) == 4  # k8s_watch, metrics, hardware, flux all launched
+    assert len(started) == 5  # k8s_watch, metrics, hardware, flux, pvc all launched
 
 
 def test_get_state_endpoint_returns_snapshot(monkeypatch, tmp_path):

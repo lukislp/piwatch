@@ -84,11 +84,22 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
 
 // ---------------- Nodes (charts) ----------------
 export function Nodes({ snap, mode }: { snap: Snapshot; mode: Mode }) {
+  const mbFormatter = (v: number) => `${v.toFixed(v < 10 ? 1 : 0)} MB/s`;
   return (
     <>
       <NodeChart histories={snap.node_history} field="cpu_pct" mode={mode} unit="%" domain={[0, 100]} title="CPU usage" />
       <NodeChart histories={snap.node_history} field="mem_pct" mode={mode} unit="%" domain={[0, 100]} title="RAM usage" />
       <NodeChart histories={snap.node_history} field="temp_c" mode={mode} unit="°C" domain={[30, 90]} title="CPU temperature" />
+      <NodeChart
+        histories={scaledHistory(snap.node_history, "net_rx_bytes_per_s", 1024 * 1024, "rx_mb")}
+        field="rx_mb" mode={mode} unit=" MB/s" title="Network receive"
+        axisWidth={70} yTickFormatter={mbFormatter}
+      />
+      <NodeChart
+        histories={scaledHistory(snap.node_history, "net_tx_bytes_per_s", 1024 * 1024, "tx_mb")}
+        field="tx_mb" mode={mode} unit=" MB/s" title="Network transmit"
+        axisWidth={70} yTickFormatter={mbFormatter}
+      />
     </>
   );
 }

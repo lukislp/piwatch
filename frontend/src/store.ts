@@ -85,6 +85,8 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
         temp_c: d.temp_c,
         nvme_read_bytes_per_s: d.nvme_read_bytes_per_s,
         nvme_write_bytes_per_s: d.nvme_write_bytes_per_s,
+        net_rx_bytes_per_s: d.net_rx_bytes_per_s,
+        net_tx_bytes_per_s: d.net_tx_bytes_per_s,
       };
       return {
         ...snap,

@@ -303,11 +303,22 @@ async def run(state: ClusterState):
         for ns, pod, _, _ in PODS
     }
 
+    NODE_CPU_CORES = 4
+    NODE_MEM_BYTES = 8 * 1024**3  # matches the "4" / "8Gi" node capacity seeded above
+
     tick = 0
     while True:
         for i, n in enumerate(NODES):
+            cpu_pct = cpu[n].next()
+            mem_pct = mem[n].next()
             state.record_node_sample(
-                n, {"cpu_pct": cpu[n].next(), "mem_pct": mem[n].next()}
+                n,
+                {
+                    "cpu_pct": cpu_pct,
+                    "mem_pct": mem_pct,
+                    "cpu_cores": round(NODE_CPU_CORES * cpu_pct / 100, 2),
+                    "mem_bytes": int(NODE_MEM_BYTES * mem_pct / 100),
+                },
             )
             read_bps = nvme_read_rate[n].next()
             write_bps = nvme_write_rate[n].next()

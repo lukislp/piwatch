@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/lukislp/piwatch/compare/v1.8.0...v1.9.0) (2026-08-15)
+
+
+### Features
+
+* extend Flux GitOps card with image automation, resource count, and source status ([2f214c2](https://github.com/lukislp/piwatch/commit/2f214c29ca9b56fbae317d426fb1fd9d87619600))
+
 # [1.8.0](https://github.com/lukislp/piwatch/compare/v1.7.1...v1.8.0) (2026-08-15)
 
 

@@ -470,8 +470,11 @@ def test_parse_cpu_micro_suffix():
 
 
 class _FakeCustomObjectsApi:
-    def __init__(self, items_sequence, error=None):
-        self._items_sequence = items_sequence
+    """Serves separate item lists per `plural` (nodes vs. pods), since
+    metrics.run() now queries both every iteration."""
+
+    def __init__(self, items_by_plural=None, error=None):
+        self._items_by_plural = items_by_plural or {}
         self._error = error
         self.calls = 0
 
@@ -479,7 +482,7 @@ class _FakeCustomObjectsApi:
         if self._error:
             raise self._error
         self.calls += 1
-        return {"items": self._items_sequence}
+        return {"items": self._items_by_plural.get(plural, [])}
 
 
 def test_metrics_run_records_valid_and_skips_unparsable(monkeypatch):
@@ -499,7 +502,7 @@ def test_metrics_run_records_valid_and_skips_unparsable(monkeypatch):
         {"metadata": {"name": "pi-2"}, "usage": {"cpu": "100m", "memory": "256Mi"}},
         {"metadata": {"name": "pi-3"}, "usage": {"cpu": "not-a-number", "memory": "256Mi"}},
     ]
-    fake_api = _FakeCustomObjectsApi(items)
+    fake_api = _FakeCustomObjectsApi({"nodes": items})
     monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
     monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
 
@@ -514,7 +517,7 @@ def test_metrics_run_records_valid_and_skips_unparsable(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(metrics.run(st))
 
-    assert fake_api.calls == 1
+    assert fake_api.calls == 2  # nodes + pods
     assert "pi-1" in st.node_metrics
     assert st.node_metrics["pi-1"]["cpu_pct"] == pytest.approx(5.0)  # 0.2 cores / 4
     assert "pi-2" in st.node_metrics  # used default 4-core / 8Gi fallback
@@ -530,7 +533,7 @@ def test_metrics_run_retries_after_apiserver_error(monkeypatch):
     from app.state import ClusterState
 
     st = ClusterState()
-    fake_api = _FakeCustomObjectsApi([], error=RuntimeError("connection refused"))
+    fake_api = _FakeCustomObjectsApi(error=RuntimeError("connection refused"))
     monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
     monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
 
@@ -545,6 +548,49 @@ def test_metrics_run_retries_after_apiserver_error(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(metrics.run(st))
     assert sleep_calls == [30]
+
+
+def test_metrics_run_records_pod_usage_and_skips_unparsable(monkeypatch):
+    """Same happy-path/skip semantics as node metrics, but per pod: each
+    pod's containers are summed into one CPU/RAM sample."""
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import metrics
+    from app.state import ClusterState
+
+    st = ClusterState()
+
+    pod_items = [
+        {
+            "metadata": {"name": "app-1", "namespace": "default"},
+            "containers": [
+                {"usage": {"cpu": "100m", "memory": "128Mi"}},
+                {"usage": {"cpu": "50m", "memory": "64Mi"}},
+            ],
+        },
+        {
+            "metadata": {"name": "app-2", "namespace": "default"},
+            "containers": [{"usage": {"cpu": "not-a-number", "memory": "64Mi"}}],
+        },
+    ]
+    fake_api = _FakeCustomObjectsApi({"pods": pod_items})
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(metrics.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(metrics.run(st))
+
+    assert st.pod_metrics["default/app-1"]["cpu_cores"] == pytest.approx(0.15)
+    assert st.pod_metrics["default/app-1"]["mem_bytes"] == 128 * 1024**2 + 64 * 1024**2
+    assert "default/app-2" not in st.pod_metrics  # unparsable usage.cpu -> skipped
 
 
 # ==================================================================

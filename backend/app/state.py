@@ -36,6 +36,10 @@ class ClusterState:
         self.node_metrics: dict[str, dict[str, Any]] = {}
         self.hardware: dict[str, dict[str, Any]] = {}
 
+        # CPU/RAM usage per pod (latest sample only -- unlike nodes, pods churn
+        # often enough that a per-pod ring buffer would be an unbounded memory sink)
+        self.pod_metrics: dict[str, dict[str, Any]] = {}
+
         # Time series: node -> deque[{t, cpu_pct, mem_pct, temp_c}]
         self.node_history: dict[str, deque[dict[str, Any]]] = {}
 
@@ -85,6 +89,7 @@ class ClusterState:
 
     def remove_pod(self, key: str) -> None:
         self.pods.pop(key, None)
+        self.pod_metrics.pop(key, None)
         self.publish("pod_deleted", {"key": key})
 
     def upsert_deployment(self, key: str, obj: dict) -> None:
@@ -113,6 +118,11 @@ class ClusterState:
             }
         )
         self.publish("node_metrics", {"node": node, **merged})
+
+    def record_pod_sample(self, key: str, sample: dict) -> None:
+        """Latest CPU/RAM usage sample for one pod (ns/name key)."""
+        self.pod_metrics[key] = {**sample, "t": now()}
+        self.publish("pod_metrics", {"key": key, **self.pod_metrics[key]})
 
     def record_hardware(self, node: str, data: dict) -> None:
         self.hardware[node] = {**data, "t": now()}
@@ -152,6 +162,7 @@ class ClusterState:
             "events": list(self.events),
             "node_metrics": self.node_metrics,
             "hardware": self.hardware,
+            "pod_metrics": self.pod_metrics,
             "node_history": {k: list(v) for k, v in self.node_history.items()},
             "healthchecks": {
                 name: {

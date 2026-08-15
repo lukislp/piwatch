@@ -1,5 +1,6 @@
-"""Polls the metrics-server (metrics.k8s.io, built into k3s) every 10s and
-converts node CPU/memory usage into percentages of node capacity.
+"""Polls the metrics-server (metrics.k8s.io, built into k3s) every 10s:
+converts node CPU/memory usage into percentages of node capacity, and
+records raw per-pod CPU/RAM usage (summed across each pod's containers).
 """
 from __future__ import annotations
 
@@ -70,6 +71,28 @@ async def run(state: ClusterState):
                             )
                         except (KeyError, ValueError) as exc:
                             log.debug("Metrics for %s unreadable: %s", name, exc)
+
+                    pod_metrics = await custom.list_cluster_custom_object(
+                        "metrics.k8s.io", "v1beta1", "pods"
+                    )
+                    for item in pod_metrics.get("items", []):
+                        namespace = item["metadata"]["namespace"]
+                        pod_name = item["metadata"]["name"]
+                        key = f"{namespace}/{pod_name}"
+                        try:
+                            containers = item["containers"]
+                            cpu_cores = sum(parse_cpu(c["usage"]["cpu"]) for c in containers)
+                            mem_bytes = sum(parse_mem(c["usage"]["memory"]) for c in containers)
+                            state.record_pod_sample(
+                                key,
+                                {
+                                    "cpu_cores": round(cpu_cores, 3),
+                                    "mem_bytes": int(mem_bytes),
+                                },
+                            )
+                        except (KeyError, ValueError) as exc:
+                            log.debug("Pod metrics for %s unreadable: %s", key, exc)
+
                     await asyncio.sleep(POLL_INTERVAL)
         except asyncio.CancelledError:
             raise

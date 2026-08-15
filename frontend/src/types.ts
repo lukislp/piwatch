@@ -60,6 +60,12 @@ export interface NodeMetrics {
   t?: number;
 }
 
+export interface PodMetrics {
+  cpu_cores?: number;
+  mem_bytes?: number;
+  t?: number;
+}
+
 export interface HistoryPoint {
   t: number;
   cpu_pct?: number;
@@ -91,6 +97,7 @@ export interface Snapshot {
   events: EventInfo[];
   node_metrics: Record<string, NodeMetrics>;
   hardware: Record<string, NodeMetrics>;
+  pod_metrics: Record<string, PodMetrics>;
   node_history: Record<string, HistoryPoint[]>;
   healthchecks: Record<string, HealthcheckEntry>;
 }

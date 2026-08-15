@@ -713,6 +713,19 @@ def test_publish_swallows_errors_from_a_misbehaving_subscriber():
     asyncio.run(scenario())
 
 
+def test_record_pod_sample_and_remove_pod_clears_metrics():
+    async def scenario():
+        st = ClusterState()
+        st.record_pod_sample("ns/pod-1", {"cpu_cores": 0.1, "mem_bytes": 1000})
+        assert st.pod_metrics["ns/pod-1"]["cpu_cores"] == 0.1
+        assert "pod_metrics" in st.snapshot()
+
+        st.remove_pod("ns/pod-1")
+        assert "ns/pod-1" not in st.pod_metrics
+
+    asyncio.run(scenario())
+
+
 def test_remove_node_pod_deployment_update_state_and_publish():
     async def scenario():
         st = ClusterState()

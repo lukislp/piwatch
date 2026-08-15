@@ -30,10 +30,16 @@ function fmtTime(t: number) {
 
 /** Multi-node line chart over the shared history (one series per node). */
 export function NodeChart({
-  histories, field, mode, unit, domain, title,
+  histories, field, mode, unit, domain, title, axisWidth, yTickFormatter,
 }: {
   histories: Record<string, { t: number; [k: string]: number | undefined }[]>;
   field: string; mode: Mode; unit: string; domain?: [number, number]; title: string;
+  /** Wider axis reservation for longer tick labels (default 54px fits "100 %"/"90 °C"
+   * but clips e.g. "12.5 MB/s"). */
+  axisWidth?: number;
+  /** Custom Y-axis tick label formatting -- default auto-ticks can land on ugly
+   * fractions (e.g. "1.05") when the domain isn't a fixed round range. */
+  yTickFormatter?: (v: number) => string;
 }) {
   const chrome = CHROME[mode];
   const nodes = Object.keys(histories).sort();
@@ -56,7 +62,15 @@ export function NodeChart({
         <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -14 }}>
           <CartesianGrid stroke={chrome.grid} strokeWidth={1} vertical={false} />
           <XAxis dataKey="t" tickFormatter={fmtTime} stroke={chrome.axis} tick={{ fill: chrome.muted, fontSize: 11 }} tickLine={false} minTickGap={60} />
-          <YAxis domain={domain ?? [0, "auto"]} stroke={chrome.axis} tick={{ fill: chrome.muted, fontSize: 11 }} tickLine={false} unit={unit} width={54} />
+          <YAxis
+            domain={domain ?? [0, "auto"]}
+            stroke={chrome.axis}
+            tick={{ fill: chrome.muted, fontSize: 11 }}
+            tickLine={false}
+            unit={yTickFormatter ? undefined : unit}
+            tickFormatter={yTickFormatter}
+            width={axisWidth ?? 54}
+          />
           <Tooltip
             contentStyle={{ background: chrome.surface, border: `1px solid ${chrome.border}`, borderRadius: 8, color: chrome.inkPrimary, fontSize: 12 }}
             labelFormatter={(t) => fmtTime(Number(t))}

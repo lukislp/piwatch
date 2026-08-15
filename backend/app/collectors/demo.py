@@ -111,6 +111,31 @@ async def run(state: ClusterState):
     temp = {n: _Walker(rng.uniform(45, 55), 35, 78, 1.5) for n in NODES}
     disk = {n: _Walker(rng.uniform(30, 55), 10, 95, 0.3) for n in NODES}
 
+    # --- NVMe: static identity + slow-drifting health, per node ---
+    nvme_static = {
+        n: {
+            "nvme_model": "Demo NVMe 256GB",
+            "nvme_firmware": "DEMO1.0",
+            "nvme_serial": f"DEMOSN{i:04d}",
+            "nvme_capacity_bytes": 256 * 1000**3,
+            "nvme_spare_thresh": 10,
+            "nvme_unsafe_shutdowns": rng.randint(1, 8),
+            "nvme_power_cycles": rng.randint(5, 40),
+            "nvme_media_errors": 0,
+            "nvme_critical_warning": 0,
+            "nvme_num_err_log_entries": 0,
+            "nvme_warning_temp_time": 0,
+            "nvme_critical_comp_time": 0,
+        }
+        for i, n in enumerate(NODES)
+    }
+    nvme_temp = {n: _Walker(rng.uniform(32, 40), 25, 55, 1.0) for n in NODES}
+    nvme_wear = {n: _Walker(rng.uniform(1, 4), 0, 100, 0.02) for n in NODES}  # drifts up very slowly
+    nvme_read_rate = {n: _Walker(rng.uniform(0.2, 2) * 1024**2, 0, 40 * 1024**2, 4 * 1024**2) for n in NODES}
+    nvme_write_rate = {n: _Walker(rng.uniform(0.1, 1) * 1024**2, 0, 20 * 1024**2, 2 * 1024**2) for n in NODES}
+    nvme_reads = {n: rng.randint(500_000, 2_000_000) for n in NODES}
+    nvme_writes = {n: rng.randint(500_000, 2_000_000) for n in NODES}
+
     # --- walkers per pod (small, plausible per-container CPU/RAM usage) ---
     pod_cpu = {f"{ns}/{pod}": _Walker(rng.uniform(0.01, 0.15), 0.005, 0.6, 0.03) for ns, pod, _ in PODS}
     pod_mem = {
@@ -120,10 +145,15 @@ async def run(state: ClusterState):
 
     tick = 0
     while True:
-        for n in NODES:
+        for i, n in enumerate(NODES):
             state.record_node_sample(
                 n, {"cpu_pct": cpu[n].next(), "mem_pct": mem[n].next()}
             )
+            read_bps = nvme_read_rate[n].next()
+            write_bps = nvme_write_rate[n].next()
+            nvme_reads[n] += int(read_bps * 5 / 512_000)  # 5s tick, bytes -> "data units"
+            nvme_writes[n] += int(write_bps * 5 / 512_000)
+            wear = nvme_wear[n].next()
             state.record_hardware(
                 n,
                 {
@@ -131,6 +161,19 @@ async def run(state: ClusterState):
                     "disk_used_pct": disk[n].next(),
                     "load1": round(cpu[n].value / 25, 2),
                     "uptime_s": int(time.time() - state.started_at) + 86400 * 12,
+                    "nvme_temp_c": nvme_temp[n].next(),
+                    "nvme_percent_used": wear,
+                    "nvme_avail_spare": round(max(0, 100 - wear * 0.6), 1),
+                    "nvme_power_on_hours": int((time.time() - state.started_at) / 3600) + 300 + i * 120,
+                    "nvme_data_units_read": nvme_reads[n],
+                    "nvme_data_units_written": nvme_writes[n],
+                    "nvme_host_read_commands": nvme_reads[n] * 8,
+                    "nvme_host_write_commands": nvme_writes[n] * 8,
+                    "nvme_controller_busy_time": int((time.time() - state.started_at) / 60),
+                    "nvme_read_bytes_per_s": int(read_bps),
+                    "nvme_write_bytes_per_s": int(write_bps),
+                    "undervoltage": False,
+                    **nvme_static[n],
                 },
             )
         for ns, pod, _ in PODS:

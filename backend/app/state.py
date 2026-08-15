@@ -16,6 +16,14 @@ HISTORY_LEN = 1080
 EVENTS_LEN = 200
 CHECK_HISTORY_LEN = 500
 
+# Fields captured per node_history sample -- shared with collectors/history.py, which
+# persists exactly this shape to survive a pod restart (see its module docstring).
+NODE_HISTORY_FIELDS = (
+    "cpu_pct", "mem_pct", "temp_c",
+    "nvme_read_bytes_per_s", "nvme_write_bytes_per_s",
+    "net_rx_bytes_per_s", "net_tx_bytes_per_s",
+)
+
 
 def now() -> float:
     return time.time()
@@ -173,18 +181,7 @@ class ClusterState:
         hist = self.node_history.setdefault(node, deque(maxlen=HISTORY_LEN))
         merged = {**self.node_metrics.get(node, {}), **sample, "t": now()}
         self.node_metrics[node] = merged
-        hist.append(
-            {
-                "t": merged["t"],
-                "cpu_pct": merged.get("cpu_pct"),
-                "mem_pct": merged.get("mem_pct"),
-                "temp_c": merged.get("temp_c"),
-                "nvme_read_bytes_per_s": merged.get("nvme_read_bytes_per_s"),
-                "nvme_write_bytes_per_s": merged.get("nvme_write_bytes_per_s"),
-                "net_rx_bytes_per_s": merged.get("net_rx_bytes_per_s"),
-                "net_tx_bytes_per_s": merged.get("net_tx_bytes_per_s"),
-            }
-        )
+        hist.append({"t": merged["t"], **{f: merged.get(f) for f in NODE_HISTORY_FIELDS}})
         self.publish("node_metrics", {"node": node, **merged})
 
     def record_pod_sample(self, key: str, sample: dict) -> None:

@@ -43,6 +43,11 @@ cluster involved.
   throughput charts. Plus the Pi firmware's under-voltage (bad PSU/PoE) flag, surfaced as a
   plain OK/error indicator on the Overview page
 - **Metrics**: CPU/RAM usage via metrics-server (bundled with k3s), ~3h history
+- **Persistent history** (optional, set `PIWATCH_HISTORY_DB`): the ~3h chart window survives
+  a pod restart instead of starting empty, backed by a local SQLite file. Bounded, not
+  unlimited -- rows older than `PIWATCH_HISTORY_RETENTION_DAYS` (default 7) are pruned
+  periodically. Storage is node-local (hostPath), one file per replica, not a shared PVC --
+  see the comment in `deploy/deployment.yaml` for why
 - **Cluster capacity overview**: two Overview tiles showing total CPU cores and RAM used
   vs. allocatable across all nodes, so you can see headroom before a pod fails to schedule
 - **Network throughput** per node (RX/TX), summed across physical interfaces only
@@ -200,6 +205,8 @@ cd backend && python -m pytest tests/
 | `PIWATCH_AGENT_SERVICE` | Headless service for the node-agents | `piwatch-node-agent.monitoring…` |
 | `PIWATCH_PROMETHEUS_URL` | Prometheus base URL, for PVC usage % (optional) | – |
 | `PIWATCH_AUTO_HEALTHCHECKS` | `1` = auto-generate checks from HTTPRoutes/LoadBalancer Services | – |
+| `PIWATCH_HISTORY_DB` | Path to a SQLite file for persistent node history (optional) | – |
+| `PIWATCH_HISTORY_RETENTION_DAYS` | Max age of persisted history rows before pruning | `7` |
 
 ## Deliberate simplifications
 

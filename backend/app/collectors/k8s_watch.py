@@ -54,14 +54,24 @@ def map_node(n) -> dict:
     }
 
 
+def _terminated_reason(state) -> str | None:
+    return state.terminated.reason if state and state.terminated else None
+
+
 def map_pod(p) -> dict:
     statuses = p.status.container_statuses or []
     restarts = sum(s.restart_count for s in statuses)
     ready = sum(1 for s in statuses if s.ready)
     waiting_reason = None
+    # OOMKilled containers usually aren't still OOMKilled *right now* -- kubelet restarts
+    # them and they go back to Running. last_state is what still shows the OOM after that,
+    # so both current and last state need checking to not miss a since-recovered kill.
+    oom_killed = False
     for s in statuses:
         if s.state and s.state.waiting:
             waiting_reason = s.state.waiting.reason
+        if "OOMKilled" in (_terminated_reason(s.state), _terminated_reason(s.last_state)):
+            oom_killed = True
     return {
         "key": f"{p.metadata.namespace}/{p.metadata.name}",
         "name": p.metadata.name,
@@ -73,6 +83,7 @@ def map_pod(p) -> dict:
         "restarts": restarts,
         "containers": [c.name for c in (p.spec.containers or [])],
         "images": [c.image for c in (p.spec.containers or [])],
+        "oom_killed": oom_killed,
         "created": p.metadata.creation_timestamp.timestamp() if p.metadata.creation_timestamp else None,
     }
 

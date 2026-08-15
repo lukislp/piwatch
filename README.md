@@ -25,6 +25,8 @@ cluster involved.
 - **Rollout drift detection**: flags a Deployment when its replicas haven't all updated yet, or
   are running different image tags (best-effort pod-to-Deployment match by naming convention --
   PiWatch doesn't watch ReplicaSets/ownerReferences)
+- **OOMKilled detection**: flags a pod in the Workloads table when a container was killed for
+  exceeding its memory limit, even after kubelet already restarted it back to Running
 - **Per-pod CPU/RAM usage**: live usage per pod/workload via metrics-server, right in the Workloads table
 - **Pi hardware**: CPU temperature, load, RAM, disk, uptime per node (DaemonSet agent)
 - **NVMe + power health**: dedicated NVMe tab per node -- temperature, model, firmware,

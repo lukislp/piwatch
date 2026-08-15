@@ -97,6 +97,12 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
     }
     case "flux_kustomizations":
       return { ...snap, flux_kustomizations: d };
+    case "flux_git_repositories":
+      return { ...snap, flux_git_repositories: d };
+    case "flux_image_policies":
+      return { ...snap, flux_image_policies: d };
+    case "flux_image_automations":
+      return { ...snap, flux_image_automations: d };
     case "healthcheck": {
       const name = d.name as string;
       const entry = snap.healthchecks[name] ?? { config: { name }, history: [] };

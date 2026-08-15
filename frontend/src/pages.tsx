@@ -79,6 +79,7 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
         })}
       </div>
       <GitOpsStatus snap={snap} />
+      <ImageAutomationStatus snap={snap} />
     </>
   );
 }
@@ -107,26 +108,62 @@ function GitOpsStatus({ snap }: { snap: Snapshot }) {
   const now = useNow();
   const items = Object.values(snap.flux_kustomizations).sort((a, b) => a.name.localeCompare(b.name));
   if (items.length === 0) return null;
+  const sourceFor = (k: (typeof items)[number]) => {
+    if (k.source_kind !== "GitRepository" || !k.source_name) return undefined;
+    const ns = k.source_namespace ?? k.namespace;
+    return snap.flux_git_repositories[`${ns}/${k.source_name}`];
+  };
   return (
     <div className="card">
       <h2>GitOps (Flux)</h2>
       <table>
-        <thead><tr><th>Kustomization</th><th>Namespace</th><th>Status</th><th>Revision</th><th className="num">Next sync</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Kustomization</th>
+            <th>Namespace</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th>Revision</th>
+            <th className="num">Resources</th>
+            <th className="num">Next sync</th>
+          </tr>
+        </thead>
         <tbody>
-          {items.map((k) => (
-            <tr key={k.key}>
-              <td>{k.name}</td>
-              <td className="muted">{k.namespace}</td>
-              <td>
-                <Dot color={k.ready ? STATUS.good : STATUS.critical} />
-                {k.ready ? "Synced" : (k.reason ?? "Not synced")}
-              </td>
-              <td className="mono muted">{k.last_applied_revision ?? "–"}</td>
-              <td className="num muted">
-                {k.next_reconcile_t != null ? fmtCountdown(k.next_reconcile_t - now) : "–"}
-              </td>
-            </tr>
-          ))}
+          {items.map((k) => {
+            const src = sourceFor(k);
+            return (
+              <tr key={k.key}>
+                <td>{k.name}</td>
+                <td className="muted">{k.namespace}</td>
+                <td>
+                  <Dot color={k.ready ? STATUS.good : STATUS.critical} />
+                  {k.ready ? "Synced" : (k.reason ?? "Not synced")}
+                  {k.apply_pending && (
+                    <span style={{ color: STATUS.warning, marginLeft: 6 }} title="Apply attempt in progress or stuck">
+                      ⚠ apply pending
+                    </span>
+                  )}
+                </td>
+                <td className="muted">
+                  {src ? (
+                    <>
+                      <Dot color={src.ready ? STATUS.good : STATUS.critical} />
+                      {k.source_name}
+                    </>
+                  ) : k.source_name ? (
+                    `${k.source_kind ?? ""} ${k.source_name}`.trim()
+                  ) : (
+                    "–"
+                  )}
+                </td>
+                <td className="mono muted">{k.last_applied_revision ?? "–"}</td>
+                <td className="num muted">{k.managed_resource_count ?? "–"}</td>
+                <td className="num muted">
+                  {k.next_reconcile_t != null ? fmtCountdown(k.next_reconcile_t - now) : "–"}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {items.some((k) => !k.ready && k.message) && (
@@ -137,6 +174,76 @@ function GitOpsStatus({ snap }: { snap: Snapshot }) {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------- GitOps (Flux image automation) ----------------
+// Hidden entirely when empty: only relevant to clusters using Flux's
+// image-reflector/image-automation controllers, not plain Flux users.
+function ImageAutomationStatus({ snap }: { snap: Snapshot }) {
+  const policies = Object.values(snap.flux_image_policies).sort((a, b) => a.name.localeCompare(b.name));
+  const automations = Object.values(snap.flux_image_automations).sort((a, b) => a.name.localeCompare(b.name));
+  if (policies.length === 0 && automations.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Image Automation (Flux)</h2>
+      {policies.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Policy</th>
+              <th>Image</th>
+              <th>Latest tag</th>
+              <th>Previous tag</th>
+              <th className="num">Tags scanned</th>
+              <th className="num">Last scan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {policies.map((p) => (
+              <tr key={p.key}>
+                <td>
+                  <Dot color={p.ready ? STATUS.good : STATUS.critical} />
+                  {p.name}
+                </td>
+                <td className="mono muted">{p.image ?? "–"}</td>
+                <td className="mono">{p.latest_tag ?? "–"}</td>
+                <td className="mono muted">{p.previous_tag ?? "–"}</td>
+                <td className="num muted">{p.tag_count ?? "–"}</td>
+                <td className="num muted">{fmtAge(p.last_scan_time ? Date.parse(p.last_scan_time) / 1000 : undefined)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {automations.length > 0 && (
+        <table style={{ marginTop: policies.length > 0 ? 12 : 0 }}>
+          <thead>
+            <tr>
+              <th>Automation</th>
+              <th>Status</th>
+              <th className="num">Last run</th>
+              <th>Last push</th>
+              <th className="num">Pushed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {automations.map((a) => (
+              <tr key={a.key}>
+                <td>{a.name}</td>
+                <td>
+                  <Dot color={a.ready ? STATUS.good : STATUS.critical} />
+                  {a.ready ? "OK" : (a.reason ?? "Not ready")}
+                </td>
+                <td className="num muted">{fmtAge(a.last_automation_run_time ? Date.parse(a.last_automation_run_time) / 1000 : undefined)}</td>
+                <td className="mono muted">{a.last_push_commit ? a.last_push_commit.slice(0, 7) : "–"}</td>
+                <td className="num muted">{fmtAge(a.last_push_time ? Date.parse(a.last_push_time) / 1000 : undefined)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

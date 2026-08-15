@@ -43,8 +43,9 @@ cluster involved.
   resource count, an apply-in-progress/stuck indicator, a countdown to the next reconcile, and
   its Git source's sync status. If Flux's image-automation controllers are installed, a second
   card shows each image policy's latest/previous tag and scan time plus each automation's last
-  run and last Git push. Not a hard dependency -- stays hidden if Flux (or image automation)
-  isn't installed
+  run and last Git push -- and the tag actually running right now (best-effort match against
+  Deployment images by repository), highlighted when it's behind the latest scanned tag. Not a
+  hard dependency -- stays hidden if Flux (or image automation) isn't installed
 - **PVC storage usage**: a "Storage" card on the Workloads page lists every PersistentVolumeClaim
   with its status, storage class and capacity. Usage % additionally needs
   [Prometheus](https://prometheus.io/) scraping kubelet (set `PIWATCH_PROMETHEUS_URL`) -- without

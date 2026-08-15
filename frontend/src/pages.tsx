@@ -244,9 +244,27 @@ function GitOpsStatus({ snap }: { snap: Snapshot }) {
 // ---------------- GitOps (Flux image automation) ----------------
 // Hidden entirely when empty: only relevant to clusters using Flux's
 // image-reflector/image-automation controllers, not plain Flux users.
+// Best-effort join, same spirit as rolloutDrift below: matches a policy's image repository
+// (everything before the last ":") against each Deployment's own image refs, since PiWatch
+// doesn't track which Deployment a Flux ImagePolicy is meant for -- there's no field for that,
+// policies just scan a repository.
+function installedTagsFor(image: string | null | undefined, deployments: DeploymentInfo[]): string[] {
+  if (!image) return [];
+  const tags = new Set<string>();
+  for (const d of deployments) {
+    for (const img of d.images) {
+      const idx = img.lastIndexOf(":");
+      if (idx <= 0) continue;
+      if (img.slice(0, idx) === image) tags.add(img.slice(idx + 1));
+    }
+  }
+  return [...tags];
+}
+
 function ImageAutomationStatus({ snap }: { snap: Snapshot }) {
   const policies = Object.values(snap.flux_image_policies).sort((a, b) => a.name.localeCompare(b.name));
   const automations = Object.values(snap.flux_image_automations).sort((a, b) => a.name.localeCompare(b.name));
+  const deployments = Object.values(snap.deployments);
   if (policies.length === 0 && automations.length === 0) return null;
   return (
     <div className="card">
@@ -257,6 +275,7 @@ function ImageAutomationStatus({ snap }: { snap: Snapshot }) {
             <tr>
               <th>Policy</th>
               <th>Image</th>
+              <th>Installed</th>
               <th>Latest tag</th>
               <th>Previous tag</th>
               <th className="num">Tags scanned</th>
@@ -264,19 +283,38 @@ function ImageAutomationStatus({ snap }: { snap: Snapshot }) {
             </tr>
           </thead>
           <tbody>
-            {policies.map((p) => (
-              <tr key={p.key}>
-                <td>
-                  <Dot color={p.ready ? STATUS.good : STATUS.critical} />
-                  {p.name}
-                </td>
-                <td className="mono muted">{p.image ?? "–"}</td>
-                <td className="mono">{p.latest_tag ?? "–"}</td>
-                <td className="mono muted">{p.previous_tag ?? "–"}</td>
-                <td className="num muted">{p.tag_count ?? "–"}</td>
-                <td className="num muted">{fmtAge(p.last_scan_time ? Date.parse(p.last_scan_time) / 1000 : undefined)}</td>
-              </tr>
-            ))}
+            {policies.map((p) => {
+              const installed = installedTagsFor(p.image, deployments);
+              return (
+                <tr key={p.key}>
+                  <td>
+                    <Dot color={p.ready ? STATUS.good : STATUS.critical} />
+                    {p.name}
+                  </td>
+                  <td className="mono muted">{p.image ?? "–"}</td>
+                  <td className="mono">
+                    {installed.length === 0 ? (
+                      <span className="muted" title="No Deployment running this image found">–</span>
+                    ) : installed.length > 1 ? (
+                      <span style={{ color: STATUS.warning }} title="Replicas running different image tags">
+                        {installed.join(" / ")}
+                      </span>
+                    ) : (
+                      <span
+                        style={{ color: p.latest_tag && installed[0] !== p.latest_tag ? STATUS.warning : undefined }}
+                        title={p.latest_tag && installed[0] !== p.latest_tag ? "Update available" : undefined}
+                      >
+                        {installed[0]}
+                      </span>
+                    )}
+                  </td>
+                  <td className="mono">{p.latest_tag ?? "–"}</td>
+                  <td className="mono muted">{p.previous_tag ?? "–"}</td>
+                  <td className="num muted">{p.tag_count ?? "–"}</td>
+                  <td className="num muted">{fmtAge(p.last_scan_time ? Date.parse(p.last_scan_time) / 1000 : undefined)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

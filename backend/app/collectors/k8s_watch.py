@@ -160,6 +160,20 @@ def map_service(s) -> dict:
     }
 
 
+def map_pv(v) -> dict:
+    claim_ref = v.spec.claim_ref
+    return {
+        "key": v.metadata.name,
+        "name": v.metadata.name,
+        "phase": v.status.phase if v.status else None,
+        "capacity": (v.spec.capacity or {}).get("storage"),
+        "storage_class": v.spec.storage_class_name,
+        "reclaim_policy": v.spec.persistent_volume_reclaim_policy,
+        "claim_namespace": claim_ref.namespace if claim_ref else None,
+        "claim_name": claim_ref.name if claim_ref else None,
+    }
+
+
 def map_event(e) -> dict:
     ts = e.last_timestamp or e.event_time or e.metadata.creation_timestamp
     return {
@@ -199,6 +213,8 @@ async def _watch_loop(state: ClusterState, kind: str):
                     lister, mapper = apps.list_daemon_set_for_all_namespaces, map_daemonset
                 elif kind == "services":
                     lister, mapper = v1.list_service_for_all_namespaces, map_service
+                elif kind == "persistentvolumes":
+                    lister, mapper = v1.list_persistent_volume, map_pv
                 elif kind == "events":
                     lister, mapper = v1.list_event_for_all_namespaces, map_event
                 else:
@@ -245,6 +261,14 @@ def _apply(state: ClusterState, kind: str, ev_type: str, obj: dict) -> None:
             state.remove_service(obj["key"])
         else:
             state.upsert_service(obj["key"], obj)
+    elif kind == "persistentvolumes":
+        # Only "Released"/"Failed" PVs are orphaned/need-attention -- a PV that gets
+        # rebound (rare, but possible) must be actively removed, not left stale, since
+        # it'd otherwise never get another upsert to replace it.
+        if deleted or obj["phase"] not in ("Released", "Failed"):
+            state.remove_orphaned_pv(obj["key"])
+        else:
+            state.upsert_orphaned_pv(obj["key"], obj)
     elif kind == "events" and not deleted:
         state.add_event(obj)
 
@@ -259,5 +283,6 @@ async def run(state: ClusterState):
         _watch_loop(state, "statefulsets"),
         _watch_loop(state, "daemonsets"),
         _watch_loop(state, "services"),
+        _watch_loop(state, "persistentvolumes"),
         _watch_loop(state, "events"),
     )

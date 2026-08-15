@@ -721,6 +721,48 @@ function Storage({ snap }: { snap: Snapshot }) {
   );
 }
 
+// Hidden entirely when empty (the common case, and the point of the feature -- a
+// PersistentVolume in a healthy Bound/Available phase is never shown here at all,
+// only ones stuck Released/Failed after their PVC is long gone).
+function OrphanedPvs({ snap }: { snap: Snapshot }) {
+  const pvs = Object.values(snap.orphaned_pvs).sort((a, b) => a.key.localeCompare(b.key));
+  if (pvs.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Orphaned PersistentVolumes</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Volume</th>
+            <th>Phase</th>
+            <th className="num">Capacity</th>
+            <th>Storage class</th>
+            <th>Reclaim policy</th>
+            <th>Last claim</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pvs.map((v) => (
+            <tr key={v.key}>
+              <td>
+                <Dot color={STATUS.warning} />
+                {v.name}
+              </td>
+              <td className="muted">{v.phase ?? "–"}</td>
+              <td className="num muted">{v.capacity ?? "–"}</td>
+              <td className="muted">{v.storage_class ?? "–"}</td>
+              <td className="muted">{v.reclaim_policy ?? "–"}</td>
+              <td className="mono muted">
+                {v.claim_namespace && v.claim_name ? `${v.claim_namespace}/${v.claim_name}` : "–"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // Hidden entirely when empty, same reasoning as Storage/GitOpsStatus: not every cluster
 // runs StatefulSets (they're common for stateful apps like databases/caches, but far from
 // universal in a small homelab-style deployment).
@@ -856,6 +898,7 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
         </table>
       </div>
       <Storage snap={snap} />
+      <OrphanedPvs snap={snap} />
     </>
   );
 }

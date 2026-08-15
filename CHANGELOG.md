@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/lukislp/piwatch/compare/v1.11.0...v1.11.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* enable PVC usage % via PIWATCH_PROMETHEUS_URL ([7ca3849](https://github.com/lukislp/piwatch/commit/7ca38496e96536e6392717769ea852eb39dff934))
+
 # [1.11.0](https://github.com/lukislp/piwatch/compare/v1.10.0...v1.11.0) (2026-08-15)
 
 

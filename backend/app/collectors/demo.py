@@ -82,6 +82,13 @@ async def run(state: ClusterState):
                 "cpu_capacity": "4",
                 "mem_capacity": "8Gi",
                 "unschedulable": False,
+                # pi-worker-1 shows a demo taint -- showcases the Overview page's
+                # Schedulable indicator without needing a real cordoned/tainted node.
+                "taints": (
+                    [{"key": "dedicated", "value": "storage", "effect": "PreferNoSchedule"}]
+                    if name == "pi-worker-1"
+                    else []
+                ),
                 "created": time.time() - 86400 * 30,
             },
         )

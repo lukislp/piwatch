@@ -35,6 +35,9 @@ cluster involved.
 - **Node pressure conditions**: the Overview page's node cards show a Pressure indicator
   (MemoryPressure/DiskPressure/PIDPressure) -- an earlier warning than waiting for the node to
   go NotReady entirely
+- **Node cordon/taint indicator**: a Schedulable row on each node card flags a cordoned
+  (`kubectl drain`/`cordon`) or tainted node -- otherwise indistinguishable from a normal
+  Ready node at a glance
 - **Per-pod CPU/RAM usage**: live usage per pod/workload via metrics-server, right in the Workloads table
 - **Pi hardware**: CPU temperature, load, RAM, disk, uptime per node (DaemonSet agent)
 - **NVMe + power health**: dedicated NVMe tab per node -- temperature, model, firmware,

@@ -104,6 +104,16 @@ export interface HpaInfo {
   scaling_limited?: string | null;
 }
 
+export interface NetworkPolicyInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  pod_selector: string;
+  policy_types: string[];
+  ingress_rules: number;
+  egress_rules: number;
+}
+
 export interface EventInfo {
   uid: string;
   type: string;
@@ -311,6 +321,7 @@ export interface Snapshot {
   daemonsets: Record<string, DaemonSetInfo>;
   services: Record<string, ServiceInfo>;
   hpas: Record<string, HpaInfo>;
+  network_policies: Record<string, NetworkPolicyInfo>;
   orphaned_pvs: Record<string, OrphanedPvInfo>;
   events: EventInfo[];
   node_metrics: Record<string, NodeMetrics>;

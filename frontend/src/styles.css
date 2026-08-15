@@ -10,10 +10,10 @@ header.top h1{font-size:18px;margin:0;font-weight:650}
 nav.tabs{display:flex;gap:2px;margin:4px 0 16px;border-bottom:1px solid var(--grid);flex-wrap:wrap}
 nav.tabs button{background:none;border:none;color:var(--ink2);padding:8px 14px;font-size:14px;cursor:pointer;border-bottom:2px solid transparent}
 nav.tabs button.active{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;overflow-x:auto}
 .card h2{font-size:13px;font-weight:600;color:var(--ink2);margin:0 0 10px;text-transform:uppercase;letter-spacing:.04em}
 .grid{display:grid;gap:14px}
-.grid.tiles{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.grid.tiles{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
 .grid.cards{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
 .tile .v{font-size:26px;font-weight:650;line-height:1.2}
 .tile .l{color:var(--muted);font-size:12px;margin-top:2px}
@@ -36,3 +36,10 @@ button.ghost{background:none;border:1px solid var(--axis);color:var(--ink2);bord
 .conn{font-size:12px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .err{color:#d03b3b;font-size:13px}
+/* Mobile: a table with many columns (Pods, GitOps, ...) would otherwise either force
+   the whole page to scroll sideways or squeeze every cell's text onto several lines --
+   neither is readable. Keep cells on one line and let the .card's own overflow-x:auto
+   (see above) scroll just that table horizontally, page layout unaffected. */
+@media (max-width:640px){
+  td{white-space:nowrap}
+}

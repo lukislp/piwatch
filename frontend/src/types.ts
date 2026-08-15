@@ -80,6 +80,30 @@ export interface ServiceInfo {
   ports: ServicePort[];
 }
 
+export interface HpaMetric {
+  name: string;
+  target_pct?: number | null;
+  current_pct?: number | null;
+}
+
+export interface HpaInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  target_kind?: string | null;
+  target_name?: string | null;
+  min_replicas?: number | null;
+  max_replicas?: number | null;
+  current_replicas: number;
+  desired_replicas: number;
+  /** Only Resource-type metrics (CPU/memory utilization) -- see collectors/k8s_watch.py. */
+  metrics: HpaMetric[];
+  current_metrics: HpaMetric[];
+  able_to_scale?: string | null;
+  scaling_active?: string | null;
+  scaling_limited?: string | null;
+}
+
 export interface EventInfo {
   uid: string;
   type: string;
@@ -286,6 +310,7 @@ export interface Snapshot {
   statefulsets: Record<string, StatefulSetInfo>;
   daemonsets: Record<string, DaemonSetInfo>;
   services: Record<string, ServiceInfo>;
+  hpas: Record<string, HpaInfo>;
   orphaned_pvs: Record<string, OrphanedPvInfo>;
   events: EventInfo[];
   node_metrics: Record<string, NodeMetrics>;

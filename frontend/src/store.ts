@@ -94,6 +94,13 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
       delete services[d.key];
       return { ...snap, services };
     }
+    case "hpa":
+      return { ...snap, hpas: { ...snap.hpas, [d.key]: d } };
+    case "hpa_deleted": {
+      const hpas = { ...snap.hpas };
+      delete hpas[d.key];
+      return { ...snap, hpas };
+    }
     case "orphaned_pv":
       return { ...snap, orphaned_pvs: { ...snap.orphaned_pvs, [d.key]: d } };
     case "orphaned_pv_deleted": {

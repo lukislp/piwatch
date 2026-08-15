@@ -23,6 +23,8 @@ cluster involved.
 
 - **Kubernetes live**: nodes, pods, deployments, events via the watch API (no polling)
 - **Pi hardware**: CPU temperature, load, RAM, disk, uptime per node (DaemonSet agent)
+- **NVMe + power health**: SSD temperature/model/capacity and full SMART (wear %, power-on
+  hours, media errors), plus the Pi firmware's under-voltage (bad PSU/PoE) flag
 - **Metrics**: CPU/RAM usage via metrics-server (bundled with k3s), ~3h history
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Live logs** for any pod, right in the browser
@@ -98,6 +100,18 @@ your own domains.
 
 4. **Access**: whichever hostnames you configured in `deploy/httproute.yaml`
    (e.g. an internal `.lan` name plus a public domain behind your reverse proxy).
+
+## NVMe SMART needs a privileged node-agent
+
+The NVMe temperature, model and capacity fields work from plain, unprivileged sysfs
+reads. Full SMART data (wear %, power-on hours, media errors, ...) additionally needs
+`nvme-cli` and access to the NVMe admin character device -- that ioctl is gated by the
+kernel regardless of file permissions, so `deploy/daemonset-node-agent.yaml` runs the
+node-agent container with `privileged: true` and a `/dev` mount for this. That's a
+materially bigger privilege footprint than the rest of the agent (everything else is
+read-only sysfs/procfs). If you'd rather not grant it, remove `privileged: true` and the
+`dev` volume/mount -- temperature, model, capacity and the under-voltage flag keep
+working, only the SMART fields go missing.
 
 ## Testing failover
 

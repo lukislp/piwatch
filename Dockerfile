@@ -10,6 +10,11 @@ RUN npm run build
 FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PIWATCH_STATIC_DIR=/app/static
+# nvme-cli: only used by the node-agent's NVMe SMART reader (node_agent.py), and only
+# works there when the DaemonSet grants it privileged+/dev access (see
+# deploy/daemonset-node-agent.yaml) -- harmless/unused in the backend Deployment.
+RUN apt-get update && apt-get install -y --no-install-recommends nvme-cli \
+    && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app

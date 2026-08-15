@@ -75,9 +75,21 @@ async def _merge_prometheus_usage(http_client: httpx.AsyncClient, prom_url: str,
     for key, item in items.items():
         u = used.get(key)
         c = capacity.get(key)
-        if u is not None and c:
-            item["usage_bytes"] = u
-            item["usage_pct"] = round(100 * u / c, 1)
+        declared = item.get("capacity_bytes")
+        if u is None or not c or not declared:
+            continue
+        # Provisioners without real per-volume quotas (e.g. local-path-provisioner, a common k3s
+        # default) don't give kubelet a real filesystem boundary to measure -- it falls back to
+        # statfs() on the underlying node disk, so kubelet_volume_stats_capacity_bytes ends up
+        # reporting the WHOLE NODE's disk size, identically, for every PVC on that node, regardless
+        # of what was actually requested. Caught live: a 256Mi PVC "using" 25-38GiB. Cross-check
+        # against the PVC's own declared capacity (always trustworthy, straight from the K8s API)
+        # and skip rather than show a number that's really "how full is the node", not "how full is
+        # this PVC". Some slack above 1x for legitimate filesystem overhead/rounding.
+        if c > declared * 1.5:
+            continue
+        item["usage_bytes"] = u
+        item["usage_pct"] = round(100 * u / declared, 1)
 
 
 async def run(state: ClusterState):

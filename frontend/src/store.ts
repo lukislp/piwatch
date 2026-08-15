@@ -78,7 +78,14 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
     case "node_metrics": {
       const node = d.node as string;
       const hist = snap.node_history[node] ?? [];
-      const point = { t: msg.t ?? Date.now() / 1000, cpu_pct: d.cpu_pct, mem_pct: d.mem_pct, temp_c: d.temp_c };
+      const point = {
+        t: msg.t ?? Date.now() / 1000,
+        cpu_pct: d.cpu_pct,
+        mem_pct: d.mem_pct,
+        temp_c: d.temp_c,
+        nvme_read_bytes_per_s: d.nvme_read_bytes_per_s,
+        nvme_write_bytes_per_s: d.nvme_write_bytes_per_s,
+      };
       return {
         ...snap,
         node_metrics: { ...snap.node_metrics, [node]: { ...snap.node_metrics[node], ...d } },

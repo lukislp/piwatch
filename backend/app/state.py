@@ -40,7 +40,7 @@ class ClusterState:
         # often enough that a per-pod ring buffer would be an unbounded memory sink)
         self.pod_metrics: dict[str, dict[str, Any]] = {}
 
-        # Time series: node -> deque[{t, cpu_pct, mem_pct, temp_c}]
+        # Time series: node -> deque[{t, cpu_pct, mem_pct, temp_c, nvme_read_bytes_per_s, nvme_write_bytes_per_s}]
         self.node_history: dict[str, deque[dict[str, Any]]] = {}
 
         # Healthchecks: name -> {config, last, history: deque[{t, ok, ms}]}
@@ -128,22 +128,12 @@ class ClusterState:
 
     def record_hardware(self, node: str, data: dict) -> None:
         self.hardware[node] = {**data, "t": now()}
-        # temp/disk flow into the same per-node series
-        self.record_node_sample(
-            node,
-            {
-                k: v
-                for k, v in data.items()
-                if k in (
-                    "temp_c",
-                    "disk_used_pct",
-                    "load1",
-                    "uptime_s",
-                    "nvme_read_bytes_per_s",
-                    "nvme_write_bytes_per_s",
-                )
-            },
-        )
+        # Forward the whole sample (not a whitelist): record_node_sample publishes it as the
+        # live "node_metrics" WebSocket delta too, and a client's `hardware` dict is built by
+        # merging that same delta in (see store.ts) -- filtering fields out here would silently
+        # freeze them on connected clients after the first full_state snapshot. The ring-buffer
+        # history itself still only picks out a few chartable fields regardless of what's here.
+        self.record_node_sample(node, data)
 
     def record_check(self, name: str, config: dict, ok: bool, latency_ms: float | None, detail: str = "") -> None:
         entry = self.healthchecks.setdefault(

@@ -978,6 +978,30 @@ def test_publish_swallows_errors_from_a_misbehaving_subscriber():
     asyncio.run(scenario())
 
 
+def test_record_hardware_publishes_full_sample_not_just_the_chartable_fields():
+    """Regression: record_hardware() used to forward only a small whitelist
+    (temp_c, disk_used_pct, ...) into the published "node_metrics" WebSocket
+    delta. Fields outside that whitelist (e.g. nvme_model) then only ever
+    appeared once, in the initial full_state snapshot -- any live update
+    afterwards silently dropped them, freezing that data on connected
+    clients. The full sample must now be forwarded (the ring-buffer history
+    still only picks out a few numeric fields regardless, see
+    test_node_history_ring_buffer)."""
+    from app.state import ClusterState
+
+    async def scenario():
+        st = ClusterState()
+        q = st.subscribe()
+        st.record_hardware("pi-1", {"temp_c": 50.0, "nvme_model": "Demo SSD", "undervoltage": False})
+        msg = q.get_nowait()
+        assert msg["type"] == "node_metrics"
+        assert msg["data"]["nvme_model"] == "Demo SSD"
+        assert msg["data"]["undervoltage"] is False
+        assert st.node_metrics["pi-1"]["nvme_model"] == "Demo SSD"
+
+    asyncio.run(scenario())
+
+
 def test_record_pod_sample_and_remove_pod_clears_metrics():
     async def scenario():
         st = ClusterState()

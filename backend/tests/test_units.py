@@ -1101,6 +1101,24 @@ def test_set_flux_kustomizations_replaces_and_publishes():
     asyncio.run(scenario())
 
 
+def test_set_pvcs_replaces_and_publishes():
+    async def scenario():
+        st = ClusterState()
+        q = st.subscribe()
+        st.set_pvcs({"home/data": {"key": "home/data", "phase": "Bound"}})
+        msg = q.get_nowait()
+        assert msg["type"] == "pvcs"
+        assert "home/data" in msg["data"]
+        assert "home/data" in st.pvcs
+        assert "pvcs" in st.snapshot()
+
+        st.set_pvcs({"home/other": {"key": "home/other", "phase": "Bound"}})
+        assert "home/data" not in st.pvcs
+        assert "home/other" in st.pvcs
+
+    asyncio.run(scenario())
+
+
 def test_record_pod_sample_and_remove_pod_clears_metrics():
     async def scenario():
         st = ClusterState()

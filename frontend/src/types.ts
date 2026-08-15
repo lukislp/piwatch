@@ -173,6 +173,21 @@ export interface FluxImageAutomation {
   last_push_time?: string | null;
 }
 
+export interface PvcInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  phase?: string | null;
+  storage_class?: string | null;
+  access_modes: string[];
+  volume_name?: string | null;
+  requested_bytes?: number | null;
+  capacity_bytes?: number | null;
+  /** Only populated when the backend has PIWATCH_PROMETHEUS_URL configured. */
+  usage_bytes?: number | null;
+  usage_pct?: number | null;
+}
+
 export interface HealthcheckEntry {
   config: { name: string; type?: string; url?: string; host?: string; port?: number; interval?: number };
   last?: CheckResult;
@@ -196,6 +211,7 @@ export interface Snapshot {
   flux_git_repositories: Record<string, FluxGitRepository>;
   flux_image_policies: Record<string, FluxImagePolicy>;
   flux_image_automations: Record<string, FluxImageAutomation>;
+  pvcs: Record<string, PvcInfo>;
 }
 
 export type ConnStatus = "connecting" | "open" | "closed" | "unauthorized";

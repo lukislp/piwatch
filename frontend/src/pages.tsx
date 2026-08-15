@@ -94,10 +94,11 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       <div className="card">
         <h2>Pods</h2>
         <table>
-          <thead><tr><th>Pod</th><th>Namespace</th><th>Node</th><th>Status</th><th className="num">Ready</th><th className="num">Restarts</th><th className="num">Age</th></tr></thead>
+          <thead><tr><th>Pod</th><th>Namespace</th><th>Node</th><th>Status</th><th className="num">Ready</th><th className="num">Restarts</th><th className="num">CPU</th><th className="num">RAM</th><th className="num">Age</th></tr></thead>
           <tbody>
             {pods.map((p) => {
               const ok = p.phase === "Running" || p.phase === "Succeeded";
+              const m = snap.pod_metrics[p.key];
               return (
                 <tr key={p.key}>
                   <td>{p.name}</td>
@@ -106,6 +107,8 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
                   <td><Dot color={ok ? STATUS.good : STATUS.critical} />{p.reason ?? p.phase}</td>
                   <td className="num">{p.ready}</td>
                   <td className="num" style={p.restarts > 3 ? { color: STATUS.warning } : undefined}>{p.restarts}</td>
+                  <td className="num muted">{m?.cpu_cores != null ? `${Math.round(m.cpu_cores * 1000)}m` : "–"}</td>
+                  <td className="num muted">{m?.mem_bytes != null ? `${Math.round(m.mem_bytes / 1024 / 1024)}Mi` : "–"}</td>
                   <td className="num muted">{fmtAge(p.created)}</td>
                 </tr>
               );

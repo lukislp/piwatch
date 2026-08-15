@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NodeChart, Dot, StatusBadge, Tile } from "./components";
+import { NodeChart, Dot, StatusBadge, Tile, useBalancedTileColumns } from "./components";
 import { getToken } from "./store";
 import { STATUS, seriesColor, type Mode } from "./theme";
 import type { DeploymentInfo, PodInfo, Snapshot } from "./types";
@@ -88,20 +88,28 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const cpuPct = cpuCapacity > 0 ? (100 * cpuUsed) / cpuCapacity : 0;
   const memPct = memCapacity > 0 ? (100 * memUsed) / memCapacity : 0;
 
+  const tiles = [
+    <Tile key="nodes" value={`${nodesReady}/${nodes.length}`} label="Nodes ready" tone={nodesReady === nodes.length ? "good" : "critical"} />,
+    <Tile key="pods" value={`${podsRunning}/${pods.length}`} label="Pods running" tone={podsRunning === pods.length ? "good" : "warning"} />,
+    <Tile key="deps" value={`${depsReady}/${deps.length}`} label="Deployments ready" tone={depsReady === deps.length ? "good" : "warning"} />,
+    checks.length > 0 && (
+      <Tile key="checks" value={`${checksUp}/${checks.length}`} label="Healthchecks OK" tone={checksUp === checks.length ? "good" : "critical"} />
+    ),
+    <Tile key="warnings" value={String(warnings)} label="Warning events" tone={warnings === 0 ? "good" : "warning"} />,
+    cpuCapacity > 0 && (
+      <Tile key="cpu" value={`${cpuUsed.toFixed(1)}/${cpuCapacity.toFixed(0)}`} label={`CPU cores (${cpuPct.toFixed(0)}%)`} tone={capacityTone(cpuPct)} />
+    ),
+    memCapacity > 0 && (
+      <Tile key="mem" value={fmtBytesPair(memUsed, memCapacity)} label={`RAM used (${memPct.toFixed(0)}%)`} tone={capacityTone(memPct)} />
+    ),
+  ].filter((t): t is JSX.Element => Boolean(t));
+
+  const tilesGrid = useBalancedTileColumns(tiles.length);
+
   return (
     <>
-      <div className="grid tiles">
-        <Tile value={`${nodesReady}/${nodes.length}`} label="Nodes ready" tone={nodesReady === nodes.length ? "good" : "critical"} />
-        <Tile value={`${podsRunning}/${pods.length}`} label="Pods running" tone={podsRunning === pods.length ? "good" : "warning"} />
-        <Tile value={`${depsReady}/${deps.length}`} label="Deployments ready" tone={depsReady === deps.length ? "good" : "warning"} />
-        {checks.length > 0 && <Tile value={`${checksUp}/${checks.length}`} label="Healthchecks OK" tone={checksUp === checks.length ? "good" : "critical"} />}
-        <Tile value={String(warnings)} label="Warning events" tone={warnings === 0 ? "good" : "warning"} />
-        {cpuCapacity > 0 && (
-          <Tile value={`${cpuUsed.toFixed(1)}/${cpuCapacity.toFixed(0)}`} label={`CPU cores (${cpuPct.toFixed(0)}%)`} tone={capacityTone(cpuPct)} />
-        )}
-        {memCapacity > 0 && (
-          <Tile value={fmtBytesPair(memUsed, memCapacity)} label={`RAM used (${memPct.toFixed(0)}%)`} tone={capacityTone(memPct)} />
-        )}
+      <div className="grid tiles" ref={tilesGrid.ref} style={tilesGrid.style}>
+        {tiles}
       </div>
       <div className="grid cards">
         {nodes.sort((a, b) => a.name.localeCompare(b.name)).map((n) => {

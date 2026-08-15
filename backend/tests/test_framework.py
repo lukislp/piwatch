@@ -594,6 +594,112 @@ def test_metrics_run_records_pod_usage_and_skips_unparsable(monkeypatch):
 
 
 # ==================================================================
+# app.collectors.flux
+# ==================================================================
+
+
+def _kustomization_obj(
+    name="piwatch-deploy", namespace="flux-system", ready=True, revision="main@sha1:abc123"
+):
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "status": {
+            "lastAppliedRevision": revision,
+            "conditions": [
+                {
+                    "type": "Ready",
+                    "status": "True" if ready else "False",
+                    "reason": "ReconciliationSucceeded" if ready else "ReconciliationFailed",
+                    "message": "Applied revision: " + revision if ready else "build failed",
+                    "lastTransitionTime": "2026-01-01T00:00:00Z",
+                }
+            ],
+        },
+    }
+
+
+def test_map_kustomization_extracts_ready_condition():
+    from app.collectors.flux import _map_kustomization
+
+    d = _map_kustomization(_kustomization_obj(ready=True))
+    assert d["key"] == "flux-system/piwatch-deploy"
+    assert d["ready"] is True
+    assert d["reason"] == "ReconciliationSucceeded"
+    assert d["last_applied_revision"] == "main@sha1:abc123"
+
+
+def test_map_kustomization_not_ready():
+    from app.collectors.flux import _map_kustomization
+
+    d = _map_kustomization(_kustomization_obj(ready=False))
+    assert d["ready"] is False
+    assert d["reason"] == "ReconciliationFailed"
+
+
+def test_map_kustomization_missing_ready_condition_defaults_to_not_ready():
+    from app.collectors.flux import _map_kustomization
+
+    d = _map_kustomization({"metadata": {"name": "x", "namespace": "ns"}, "status": {}})
+    assert d["ready"] is False
+    assert d["reason"] is None
+
+
+def test_flux_run_polls_and_publishes_kustomizations(monkeypatch):
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import flux
+    from app.state import ClusterState
+
+    st = ClusterState()
+    fake_api = _FakeCustomObjectsApi({"kustomizations": [_kustomization_obj()]})
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(flux.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(flux.run(st))
+
+    assert "flux-system/piwatch-deploy" in st.flux_kustomizations
+    assert st.flux_kustomizations["flux-system/piwatch-deploy"]["ready"] is True
+    assert sleep_calls == [flux.POLL_INTERVAL]
+
+
+def test_flux_run_degrades_quietly_when_crd_is_missing(monkeypatch):
+    """Flux is optional -- a missing CRD (or missing RBAC for it) must not
+    crash the app, just back off and keep polling."""
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import flux
+    from app.state import ClusterState
+
+    st = ClusterState()
+    fake_api = _FakeCustomObjectsApi(error=RuntimeError("404 Not Found: kustomizations"))
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(flux.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(flux.run(st))
+
+    assert st.flux_kustomizations == {}
+    assert sleep_calls == [30]
+
+
+# ==================================================================
 # app.ws
 # ==================================================================
 
@@ -916,6 +1022,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
     monkeypatch.setattr(main_mod.k8s_watch, "run", fake_collector)
     monkeypatch.setattr(main_mod.metrics, "run", fake_collector)
     monkeypatch.setattr(main_mod.hardware, "run", fake_collector)
+    monkeypatch.setattr(main_mod.flux, "run", fake_collector)
 
     from fastapi.testclient import TestClient
 
@@ -925,7 +1032,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
         r = client.get("/readyz")
         assert r.status_code == 503
         assert r.json() == {"ready": False}
-    assert len(started) == 3  # k8s_watch, metrics, hardware all launched
+    assert len(started) == 4  # k8s_watch, metrics, hardware, flux all launched
 
 
 def test_get_state_endpoint_returns_snapshot(monkeypatch, tmp_path):

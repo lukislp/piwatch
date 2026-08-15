@@ -87,6 +87,9 @@ async def run(state: ClusterState):
                 "restarts": rng.randint(0, 3),
                 "containers": [pod.rsplit("-", 1)[0]],
                 "images": [image],
+                # node-red is the one demo pod that's been OOMKilled (and since
+                # recovered) -- showcases the Workloads tab's OOM indicator.
+                "oom_killed": pod == "node-red-59fd7",
                 "created": time.time() - rng.randint(3600, 86400 * 7),
             },
         )

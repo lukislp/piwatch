@@ -56,15 +56,24 @@ def _node_obj(name="pi-1", role_label=True, with_optional=True):
     return types.SimpleNamespace(status=status, metadata=metadata, spec=spec)
 
 
-def _pod_obj(name="p1", namespace="default", waiting=False, no_statuses=False):
+def _pod_obj(
+    name="p1", namespace="default", waiting=False, no_statuses=False,
+    oom=False, oom_in_last_state=False,
+):
     if no_statuses:
         statuses = []
     else:
         state = types.SimpleNamespace(
-            waiting=types.SimpleNamespace(reason="CrashLoopBackOff") if waiting else None
+            waiting=types.SimpleNamespace(reason="CrashLoopBackOff") if waiting else None,
+            terminated=types.SimpleNamespace(reason="OOMKilled") if oom else None,
+        )
+        last_state = types.SimpleNamespace(
+            terminated=types.SimpleNamespace(reason="OOMKilled") if oom_in_last_state else None
         )
         statuses = [
-            types.SimpleNamespace(restart_count=2, ready=not waiting, state=state)
+            types.SimpleNamespace(
+                restart_count=2, ready=not waiting, state=state, last_state=last_state
+            )
         ]
     metadata = types.SimpleNamespace(
         name=name, namespace=namespace, creation_timestamp=datetime.now(timezone.utc)
@@ -136,6 +145,7 @@ def test_map_pod_waiting_reason_and_ready_ratio():
     assert d["restarts"] == 2
     assert d["containers"] == ["app"]
     assert d["images"] == ["registry.local/app:v1"]
+    assert d["oom_killed"] is False
 
 
 def test_map_pod_no_container_statuses():
@@ -145,6 +155,25 @@ def test_map_pod_no_container_statuses():
     assert d["ready"] == "0/0"
     assert d["restarts"] == 0
     assert d["reason"] is None
+    assert d["oom_killed"] is False
+
+
+def test_map_pod_detects_oom_killed_in_current_state():
+    """Rare in practice (usually recovered by the time it's observed), but
+    the field exists on the real API object -- worth covering directly."""
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(oom=True))
+    assert d["oom_killed"] is True
+
+
+def test_map_pod_detects_oom_killed_in_last_state():
+    """The common case: kubelet already restarted the container (it's back
+    to Running), but last_state still records the OOM kill that caused it."""
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(oom_in_last_state=True))
+    assert d["oom_killed"] is True
 
 
 def test_map_deployment():

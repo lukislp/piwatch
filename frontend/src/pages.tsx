@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NodeChart, Dot, StatusBadge, Tile } from "./components";
 import { getToken } from "./store";
 import { STATUS, seriesColor, type Mode } from "./theme";
-import type { Snapshot } from "./types";
+import type { DeploymentInfo, PodInfo, Snapshot } from "./types";
 
 const fmtAge = (t?: number) => {
   if (!t) return "–";
@@ -257,6 +257,22 @@ export function Nvme({ snap, mode }: { snap: Snapshot; mode: Mode }) {
 }
 
 // ---------------- Workloads ----------------
+// Best-effort: PiWatch doesn't watch ReplicaSets/ownerReferences, so pod-to-Deployment
+// ownership is inferred from the standard Deployment->ReplicaSet->Pod naming convention
+// (pod name starts with "<deployment-name>-"). Good enough to flag a rollout, not a
+// guarantee for unusually-named workloads.
+function rolloutDrift(dep: DeploymentInfo, pods: PodInfo[]): string | null {
+  if (dep.updated < dep.replicas) {
+    return `${dep.updated}/${dep.replicas} replicas updated to the current revision`;
+  }
+  const owned = pods.filter((p) => p.namespace === dep.namespace && p.name.startsWith(`${dep.name}-`));
+  const images = new Set(owned.flatMap((p) => p.images ?? []));
+  if (images.size > 1) {
+    return `replicas running different image tags: ${[...images].join(", ")}`;
+  }
+  return null;
+}
+
 export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const deps = Object.values(snap.deployments).sort((a, b) => a.key.localeCompare(b.key));
   const pods = Object.values(snap.pods).sort((a, b) => a.key.localeCompare(b.key));
@@ -267,14 +283,22 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
         <table>
           <thead><tr><th>Name</th><th>Namespace</th><th className="num">Ready</th><th>Image</th></tr></thead>
           <tbody>
-            {deps.map((d) => (
-              <tr key={d.key}>
-                <td><Dot color={d.ready >= d.replicas ? STATUS.good : STATUS.warning} />{d.name}</td>
-                <td className="muted">{d.namespace}</td>
-                <td className="num">{d.ready}/{d.replicas}</td>
-                <td className="mono muted">{d.images.join(", ")}</td>
-              </tr>
-            ))}
+            {deps.map((d) => {
+              const drift = rolloutDrift(d, pods);
+              return (
+                <tr key={d.key}>
+                  <td><Dot color={d.ready >= d.replicas ? STATUS.good : STATUS.warning} />{d.name}</td>
+                  <td className="muted">{d.namespace}</td>
+                  <td className="num">{d.ready}/{d.replicas}</td>
+                  <td className="mono muted">
+                    {d.images.join(", ")}
+                    {drift && (
+                      <span style={{ color: STATUS.warning }} title={drift}> ⚠ rollout in progress</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

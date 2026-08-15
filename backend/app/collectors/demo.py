@@ -13,15 +13,19 @@ from ..state import ClusterState
 
 NODES = ["pi-master", "pi-worker-1", "pi-worker-2"]
 
+# (namespace, pod name, node, container image)
 PODS = [
-    ("kube-system", "traefik-5d4f9", "pi-master"),
-    ("kube-system", "coredns-6799f", "pi-master"),
-    ("kube-system", "metrics-server-54dc7", "pi-worker-1"),
-    ("monitoring", "piwatch-7c9d4-a", "pi-worker-1"),
-    ("monitoring", "piwatch-7c9d4-b", "pi-worker-2"),
-    ("home", "home-assistant-0", "pi-worker-1"),
-    ("home", "mosquitto-6b8d2", "pi-worker-2"),
-    ("home", "node-red-59fd7", "pi-worker-2"),
+    ("kube-system", "traefik-5d4f9", "pi-master", "traefik:v3.0"),
+    ("kube-system", "coredns-6799f", "pi-master", "coredns/coredns:1.11.1"),
+    ("kube-system", "metrics-server-54dc7", "pi-worker-1", "metrics-server:v0.7.0"),
+    ("monitoring", "piwatch-7c9d4-a", "pi-worker-1", "ghcr.io/lukislp/piwatch:1.5.1"),
+    # deliberately one version behind its sibling -- showcases the Workloads
+    # tab's rollout-drift indicator (replicas of the same Deployment on
+    # different image tags) without needing a real in-progress rollout.
+    ("monitoring", "piwatch-7c9d4-b", "pi-worker-2", "ghcr.io/lukislp/piwatch:1.5.0"),
+    ("home", "home-assistant-0", "pi-worker-1", "ghcr.io/home-assistant/home-assistant:2024.1"),
+    ("home", "mosquitto-6b8d2", "pi-worker-2", "eclipse-mosquitto:2"),
+    ("home", "node-red-59fd7", "pi-worker-2", "nodered/node-red:3"),
 ]
 
 EVENT_SAMPLES = [
@@ -69,7 +73,7 @@ async def run(state: ClusterState):
         )
 
     # --- seed pods & deployments ---
-    for ns, pod, node in PODS:
+    for ns, pod, node, image in PODS:
         state.upsert_pod(
             f"{ns}/{pod}",
             {
@@ -82,14 +86,17 @@ async def run(state: ClusterState):
                 "ready": "1/1",
                 "restarts": rng.randint(0, 3),
                 "containers": [pod.rsplit("-", 1)[0]],
+                "images": [image],
                 "created": time.time() - rng.randint(3600, 86400 * 7),
             },
         )
-    for ns, name, replicas in [
-        ("monitoring", "piwatch", 2),
-        ("home", "home-assistant", 1),
-        ("home", "node-red", 1),
-        ("kube-system", "coredns", 1),
+    # "updated" < replicas for piwatch matches the pods above (one replica still on
+    # the previous version) -- both rollout-drift signals agree, like a real slow rollout.
+    for ns, name, replicas, updated, images in [
+        ("monitoring", "piwatch", 2, 1, ["ghcr.io/lukislp/piwatch:1.5.1"]),
+        ("home", "home-assistant", 1, 1, ["ghcr.io/home-assistant/home-assistant:2024.1"]),
+        ("home", "node-red", 1, 1, ["nodered/node-red:3"]),
+        ("kube-system", "coredns", 1, 1, ["coredns/coredns:1.11.1"]),
     ]:
         state.upsert_deployment(
             f"{ns}/{name}",
@@ -100,8 +107,8 @@ async def run(state: ClusterState):
                 "replicas": replicas,
                 "ready": replicas,
                 "available": replicas,
-                "updated": replicas,
-                "images": [f"registry.local/{name}:latest"],
+                "updated": updated,
+                "images": images,
             },
         )
 
@@ -169,10 +176,10 @@ async def run(state: ClusterState):
     net_tx_rate = {n: _Walker(rng.uniform(0.05, 0.5) * 1024**2, 0, 15 * 1024**2, 1.5 * 1024**2) for n in NODES}
 
     # --- walkers per pod (small, plausible per-container CPU/RAM usage) ---
-    pod_cpu = {f"{ns}/{pod}": _Walker(rng.uniform(0.01, 0.15), 0.005, 0.6, 0.03) for ns, pod, _ in PODS}
+    pod_cpu = {f"{ns}/{pod}": _Walker(rng.uniform(0.01, 0.15), 0.005, 0.6, 0.03) for ns, pod, _, _ in PODS}
     pod_mem = {
         f"{ns}/{pod}": _Walker(rng.uniform(30, 150) * 1024**2, 16 * 1024**2, 400 * 1024**2, 8 * 1024**2)
-        for ns, pod, _ in PODS
+        for ns, pod, _, _ in PODS
     }
 
     tick = 0
@@ -210,7 +217,7 @@ async def run(state: ClusterState):
                     **nvme_static[n],
                 },
             )
-        for ns, pod, _ in PODS:
+        for ns, pod, _, _ in PODS:
             key = f"{ns}/{pod}"
             state.record_pod_sample(
                 key, {"cpu_cores": round(pod_cpu[key].next(), 3), "mem_bytes": int(pod_mem[key].next())}
@@ -218,7 +225,7 @@ async def run(state: ClusterState):
         # occasionally emit an event / a pod restart
         if tick % 6 == 0:
             etype, reason, msg = rng.choice(EVENT_SAMPLES)
-            ns, pod, _ = rng.choice(PODS)
+            ns, pod, _, _ = rng.choice(PODS)
             state.add_event(
                 {
                     "uid": f"demo-{tick}",

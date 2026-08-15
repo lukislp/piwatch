@@ -359,6 +359,57 @@ def test_nvme_io_rate_returns_empty_when_counters_unavailable(monkeypatch):
     assert node_agent._nvme_io_rate(None, None) == {}
 
 
+def _write_net_iface(sys_dir, name: str, physical: bool, rx: int | None = None, tx: int | None = None):
+    iface = sys_dir / "class" / "net" / name
+    stats = iface / "statistics"
+    stats.mkdir(parents=True)
+    if physical:
+        (iface / "device").mkdir()  # presence alone is what _physical_net_interfaces checks
+    if rx is not None:
+        (stats / "rx_bytes").write_text(str(rx))
+    if tx is not None:
+        (stats / "tx_bytes").write_text(str(tx))
+    return iface
+
+
+def test_physical_net_interfaces_excludes_loopback_and_virtual_ifaces(tmp_path, monkeypatch):
+    sys_dir = tmp_path / "sys"
+    _write_net_iface(sys_dir, "lo", physical=False)
+    _write_net_iface(sys_dir, "veth1234abcd", physical=False)  # k3s per-pod veth pair, no "device"
+    _write_net_iface(sys_dir, "eth0", physical=True)
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    assert node_agent._physical_net_interfaces() == ["eth0"]
+
+
+def test_read_net_bytes_sums_across_physical_interfaces(tmp_path, monkeypatch):
+    sys_dir = tmp_path / "sys"
+    _write_net_iface(sys_dir, "eth0", physical=True, rx=1000, tx=200)
+    _write_net_iface(sys_dir, "wlan0", physical=True, rx=500, tx=100)
+    _write_net_iface(sys_dir, "lo", physical=False, rx=999999, tx=999999)  # must be excluded
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    assert node_agent.read_net_bytes() == (1500, 300)
+
+
+def test_read_net_bytes_returns_none_when_no_physical_interfaces(tmp_path, monkeypatch):
+    monkeypatch.setattr(node_agent, "SYS", str(tmp_path / "no-sys"))
+    assert node_agent.read_net_bytes() is None
+
+
+def test_net_io_rate_computes_bytes_per_second_between_samples(monkeypatch):
+    monkeypatch.setattr(node_agent, "_last_net_io", None)
+    times = iter([100.0, 110.0])
+    monkeypatch.setattr(node_agent, "time", types.SimpleNamespace(monotonic=lambda: next(times)))
+
+    assert node_agent._net_io_rate(10_000, 2_000) == {}  # seeds the first sample
+    result = node_agent._net_io_rate(10_500, 2_400)  # +500 rx, +400 tx over 10s
+    assert result == {"net_rx_bytes_per_s": 50, "net_tx_bytes_per_s": 40}
+
+
+def test_net_io_rate_returns_empty_when_bytes_unavailable(monkeypatch):
+    monkeypatch.setattr(node_agent, "_last_net_io", None)
+    assert node_agent._net_io_rate(None, None) == {}
+
+
 def _seed_full_node_agent_fs(tmp_path, monkeypatch):
     sys_dir = tmp_path / "sys"
     proc_dir = tmp_path / "proc"
@@ -448,6 +499,34 @@ def test_metrics_endpoint_includes_nvme_and_power_data_when_present(tmp_path, mo
 
     assert second["nvme_read_bytes_per_s"] == round(100 * 512_000 / 5)
     assert second["nvme_write_bytes_per_s"] == round(200 * 512_000 / 5)
+
+
+def test_metrics_endpoint_includes_network_throughput_on_second_poll(tmp_path, monkeypatch):
+    """Same two-poll shape as the NVMe throughput test: the rate only exists
+    once there are two samples to diff. nvme-cli isn't mocked here and isn't
+    installed on the test runner, so it degrades to {} on its own and never
+    touches the shared `times` iterator (see _nvme_io_rate/_net_io_rate: both
+    return before calling time.monotonic() when their input is None)."""
+    from fastapi.testclient import TestClient
+
+    _seed_full_node_agent_fs(tmp_path, monkeypatch)
+    monkeypatch.setattr(node_agent, "_last_net_io", None)
+    sys_dir = tmp_path / "sys"
+    _write_net_iface(sys_dir, "eth0", physical=True, rx=100_000, tx=20_000)
+
+    times = iter([100.0, 110.0])
+    monkeypatch.setattr(node_agent, "time", types.SimpleNamespace(monotonic=lambda: next(times)))
+
+    with TestClient(node_agent.app) as client:
+        first = client.get("/metrics").json()
+        assert "net_rx_bytes_per_s" not in first  # first poll: no prior sample to diff against
+
+        (sys_dir / "class" / "net" / "eth0" / "statistics" / "rx_bytes").write_text("101_000".replace("_", ""))
+        (sys_dir / "class" / "net" / "eth0" / "statistics" / "tx_bytes").write_text("20_500".replace("_", ""))
+        second = client.get("/metrics").json()
+
+    assert second["net_rx_bytes_per_s"] == round(1000 / 10)
+    assert second["net_tx_bytes_per_s"] == round(500 / 10)
 
 
 def test_metrics_endpoint_degrades_gracefully_when_everything_missing(

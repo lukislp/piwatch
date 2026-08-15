@@ -30,6 +30,7 @@ cluster involved.
   throughput charts. Plus the Pi firmware's under-voltage (bad PSU/PoE) flag, surfaced as a
   plain OK/error indicator on the Overview page
 - **Metrics**: CPU/RAM usage via metrics-server (bundled with k3s), ~3h history
+- **Network throughput** per node (RX/TX), summed across physical interfaces only
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Live logs** for any pod, right in the browser
 - **Simple auth**: password from a Kubernetes Secret, signed tokens (failover-friendly)

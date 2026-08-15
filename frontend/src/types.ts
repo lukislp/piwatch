@@ -58,6 +58,21 @@ export interface NodeMetrics {
   load1?: number;
   uptime_s?: number;
   t?: number;
+  // Pi hardware add-ons (PoE+ M.2 HAT): all optional, present only when the
+  // underlying sysfs/nvme-cli source is available on that node -- see
+  // backend/app/node_agent.py's read_nvme_*/read_undervoltage().
+  undervoltage?: boolean;
+  nvme_temp_c?: number;
+  nvme_model?: string;
+  nvme_capacity_bytes?: number;
+  nvme_percent_used?: number;
+  nvme_power_on_hours?: number;
+  nvme_unsafe_shutdowns?: number;
+  nvme_media_errors?: number;
+  nvme_critical_warning?: number;
+  nvme_power_cycles?: number;
+  nvme_data_units_read?: number;
+  nvme_data_units_written?: number;
 }
 
 export interface PodMetrics {

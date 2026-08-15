@@ -1,3 +1,11 @@
+## [1.4.1](https://github.com/lukislp/piwatch/compare/v1.4.0...v1.4.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* **deploy:** explicitly allow privilege escalation for node-agent ([7cd0546](https://github.com/lukislp/piwatch/commit/7cd05466b71778135f47dd046c90d5e3b10ede28))
+* wrap long table cell content instead of overflowing the page ([92aeee7](https://github.com/lukislp/piwatch/commit/92aeee7f8a3bf0eccdef5aecbcdc5397eb73cf65))
+
 # [1.4.0](https://github.com/lukislp/piwatch/compare/v1.3.0...v1.4.0) (2026-08-15)
 
 

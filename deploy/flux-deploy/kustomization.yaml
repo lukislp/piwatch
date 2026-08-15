@@ -1,0 +1,22 @@
+# Deliberately ONLY these files - NOT the rest of ../. Mirrors studylife-mcp's own
+# deploy/flux-deploy/kustomization.yaml scoping (studylife-mcp repo): kustomize-controller's
+# least-privilege ClusterRole (studylife repo's k8s/flux/06-reconciler-rbac.yaml) only grants
+# permissions on Deployments/DaemonSets/ConfigMaps/Services/PersistentVolumeClaims - NOT
+# Namespaces, RBAC objects, or the Gateway API resource kinds, all of which ../ also has
+# (namespace.yaml, rbac.yaml, httproute.yaml, sealed-secrets/piwatch.yaml). Those stay
+# bootstrap-only, applied once by hand; Flux continuously reconciles exactly this subset.
+#
+# The DaemonSet is included here (unlike studylife-mcp's equivalent, which has none) - its
+# spec changes too (not just the image tag, e.g. the privileged:true + /dev mount for NVMe
+# SMART monitoring), and image-tag-only automation without applying spec changes would leave
+# it perpetually out of date with git. Needed extending the shared reconciler ClusterRole with
+# an apps/daemonsets rule (see 06-reconciler-rbac.yaml in the studylife repo) - deliberately not
+# needed by any Kustomization before this one.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../configmap-healthchecks.yaml
+  - ../deployment.yaml
+  - ../daemonset-node-agent.yaml
+  - ../service.yaml
+  - ../pdb.yaml

@@ -73,6 +73,20 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
       delete deployments[d.key];
       return { ...snap, deployments };
     }
+    case "statefulset":
+      return { ...snap, statefulsets: { ...snap.statefulsets, [d.key]: d } };
+    case "statefulset_deleted": {
+      const statefulsets = { ...snap.statefulsets };
+      delete statefulsets[d.key];
+      return { ...snap, statefulsets };
+    }
+    case "daemonset":
+      return { ...snap, daemonsets: { ...snap.daemonsets, [d.key]: d } };
+    case "daemonset_deleted": {
+      const daemonsets = { ...snap.daemonsets };
+      delete daemonsets[d.key];
+      return { ...snap, daemonsets };
+    }
     case "event":
       return { ...snap, events: [...snap.events.slice(-199), d] };
     case "node_metrics": {

@@ -3,18 +3,18 @@ kind: Deployment
 metadata:
   name: piwatch
   namespace: monitoring
-  labels: { app: piwatch }
+  labels: {app: piwatch}
 spec:
   # HA/failover: 2 replicas on different nodes. If one node goes down,
   # the second replica keeps serving; clients reconnect automatically.
   replicas: 2
   selector:
-    matchLabels: { app: piwatch }
+    matchLabels: {app: piwatch}
   strategy:
-    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
   template:
     metadata:
-      labels: { app: piwatch }
+      labels: {app: piwatch}
     spec:
       serviceAccountName: piwatch
       affinity:
@@ -26,39 +26,39 @@ spec:
               podAffinityTerm:
                 topologyKey: kubernetes.io/hostname
                 labelSelector:
-                  matchLabels: { app: piwatch }
+                  matchLabels: {app: piwatch}
       containers:
         - name: piwatch
-          image: ghcr.io/lukislp/piwatch:1.2.0 # {"$imagepolicy": "flux-system:piwatch"}
+          image: ghcr.io/lukislp/piwatch:1.3.0 # {"$imagepolicy": "flux-system:piwatch"}
           # No runAsNonRoot: the image has no USER directive (runs as root) - enforcing it
           # retroactively would crash without an accompanying Dockerfile change (+rebuild).
           # allowPrivilegeEscalation/capabilities are safe independently of that, because the
           # app needs neither setuid binaries nor special Linux capabilities.
           securityContext:
             allowPrivilegeEscalation: false
-            capabilities: { drop: ["ALL"] }
+            capabilities: {drop: ["ALL"]}
           ports:
             - containerPort: 8000
           env:
             - name: PIWATCH_PASSWORD
-              valueFrom: { secretKeyRef: { name: piwatch, key: password } }
+              valueFrom: {secretKeyRef: {name: piwatch, key: password}}
             - name: PIWATCH_SECRET
-              valueFrom: { secretKeyRef: { name: piwatch, key: secret } }
+              valueFrom: {secretKeyRef: {name: piwatch, key: secret}}
             - name: PIWATCH_CHECKS_FILE
               value: /config/healthchecks.yaml
             - name: PIWATCH_AGENT_SERVICE
               value: piwatch-node-agent.monitoring.svc.cluster.local
           volumeMounts:
-            - { name: checks, mountPath: /config, readOnly: true }
+            - {name: checks, mountPath: /config, readOnly: true}
           resources:
-            requests: { cpu: 50m, memory: 96Mi }
-            limits: { cpu: 500m, memory: 256Mi }
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 256Mi}
           livenessProbe:
-            httpGet: { path: /healthz, port: 8000 }
+            httpGet: {path: /healthz, port: 8000}
             initialDelaySeconds: 5
             periodSeconds: 15
           readinessProbe:
-            httpGet: { path: /readyz, port: 8000 }
+            httpGet: {path: /readyz, port: 8000}
             initialDelaySeconds: 3
             periodSeconds: 10
       volumes:

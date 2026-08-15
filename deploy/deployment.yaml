@@ -48,6 +48,13 @@ spec:
               value: /config/healthchecks.yaml
             - name: PIWATCH_AGENT_SERVICE
               value: piwatch-node-agent.monitoring.svc.cluster.local
+            # Optional (see collectors/pvc.py): enables PVC usage % on the Storage card. Remove
+            # this line if your cluster doesn't run Prometheus -- capacity/status still show
+            # without it, just no usage column. Needs a matching NetworkPolicy ingress rule on
+            # Prometheus if your cluster uses default-deny (see the studylife repo's
+            # k8s/12-network-policies.yaml allow-ingress-to-prometheus for the pattern).
+            - name: PIWATCH_PROMETHEUS_URL
+              value: http://prometheus.monitoring.svc.cluster.local:9090
           volumeMounts:
             - {name: checks, mountPath: /config, readOnly: true}
           resources:

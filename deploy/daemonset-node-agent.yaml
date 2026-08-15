@@ -3,13 +3,13 @@ kind: DaemonSet
 metadata:
   name: piwatch-node-agent
   namespace: monitoring
-  labels: { app: piwatch-node-agent }
+  labels: {app: piwatch-node-agent}
 spec:
   selector:
-    matchLabels: { app: piwatch-node-agent }
+    matchLabels: {app: piwatch-node-agent}
   template:
     metadata:
-      labels: { app: piwatch-node-agent }
+      labels: {app: piwatch-node-agent}
     spec:
       # The node-agent makes no Kubernetes API calls (it only reads hostPath sysfs/procfs),
       # unlike the piwatch Deployment itself (ClusterRole for the watch API, see rbac.yaml).
@@ -22,7 +22,7 @@ spec:
           operator: Exists
       containers:
         - name: agent
-          image: ghcr.io/lukislp/piwatch:1.2.0 # {"$imagepolicy": "flux-system:piwatch"}
+          image: ghcr.io/lukislp/piwatch:1.3.0 # {"$imagepolicy": "flux-system:piwatch"}
           command: ["uvicorn", "app.node_agent:app", "--host", "0.0.0.0", "--port", "9101"]
           # privileged: true is required ONLY for the NVMe SMART reader (node_agent.py's
           # read_nvme_smart(), via nvme-cli): the NVMe admin passthrough ioctl it issues is
@@ -39,24 +39,24 @@ spec:
             - containerPort: 9101
           env:
             - name: NODE_NAME
-              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
-            - { name: PIWATCH_SYS, value: /host/sys }
-            - { name: PIWATCH_PROC, value: /host/proc }
-            - { name: PIWATCH_DISK_PATH, value: /host/root }
-            - { name: PIWATCH_NVME_DEVICE, value: /host/dev/nvme0 }
+              valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+            - {name: PIWATCH_SYS, value: /host/sys}
+            - {name: PIWATCH_PROC, value: /host/proc}
+            - {name: PIWATCH_DISK_PATH, value: /host/root}
+            - {name: PIWATCH_NVME_DEVICE, value: /host/dev/nvme0}
           volumeMounts:
-            - { name: sys, mountPath: /host/sys, readOnly: true }
-            - { name: proc, mountPath: /host/proc, readOnly: true }
-            - { name: root, mountPath: /host/root, readOnly: true }
-            - { name: dev, mountPath: /host/dev }
+            - {name: sys, mountPath: /host/sys, readOnly: true}
+            - {name: proc, mountPath: /host/proc, readOnly: true}
+            - {name: root, mountPath: /host/root, readOnly: true}
+            - {name: dev, mountPath: /host/dev}
           resources:
-            requests: { cpu: 10m, memory: 32Mi }
-            limits: { cpu: 100m, memory: 64Mi }
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}
           livenessProbe:
-            httpGet: { path: /healthz, port: 9101 }
+            httpGet: {path: /healthz, port: 9101}
             periodSeconds: 30
       volumes:
-        - { name: sys, hostPath: { path: /sys } }
-        - { name: proc, hostPath: { path: /proc } }
-        - { name: root, hostPath: { path: / } }
-        - { name: dev, hostPath: { path: /dev } }
+        - {name: sys, hostPath: {path: /sys}}
+        - {name: proc, hostPath: {path: /proc}}
+        - {name: root, hostPath: {path: /}}
+        - {name: dev, hostPath: {path: /dev}}

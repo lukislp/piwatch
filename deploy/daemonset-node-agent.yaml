@@ -35,6 +35,11 @@ spec:
           # plain sysfs, only the SMART fields (wear %, power-on hours, ...) go missing.
           securityContext:
             privileged: true
+            # Explicit, not just implied by privileged:true: the previously-live manifest had
+            # allowPrivilegeEscalation:false set, and since apply only adds/changes fields it
+            # mentions, that stale false would otherwise survive the merge - combined with
+            # privileged:true, the API server rejects that as invalid (confirmed live).
+            allowPrivilegeEscalation: true
           ports:
             - containerPort: 9101
           env:

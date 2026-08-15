@@ -2144,10 +2144,30 @@ def test_probe_route_http_skips_tls_kwargs(monkeypatch):
         return await autochecks._probe_route("10.43.9.1", 8080, "app.heim.lan", tls=False)
 
     ok, _ms, detail = asyncio.run(scenario())
-    assert ok is False  # 404 >= 400
+    # a 404 still proves the backend is up and speaking HTTP -- e.g. an API/MCP server with
+    # no root-path route. Only a 5xx or a failed connection counts as actually down.
+    assert ok is True
     assert detail == "HTTP 404"
     assert "ssl" not in captured["kwargs"]
     assert "server_hostname" not in captured["kwargs"]
+
+
+def test_probe_route_5xx_reports_not_ok(monkeypatch):
+    from app.collectors import autochecks
+
+    writer = _FakeAcWriter()
+
+    async def fake_open_connection(host, port, **kwargs):
+        return _FakeAcReader(b"HTTP/1.1 502 Bad Gateway\r\n"), writer
+
+    monkeypatch.setattr(autochecks.asyncio, "open_connection", fake_open_connection)
+
+    async def scenario():
+        return await autochecks._probe_route("10.43.9.1", 8080, "app.heim.lan", tls=False)
+
+    ok, _ms, detail = asyncio.run(scenario())
+    assert ok is False
+    assert detail == "HTTP 502"
 
 
 def test_probe_route_connection_error_reports_exception_type(monkeypatch):

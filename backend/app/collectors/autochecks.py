@@ -148,7 +148,10 @@ async def _probe_route(cluster_ip: str, port: int, hostname: str, tls: bool) -> 
         ms = (time.perf_counter() - start) * 1000
         parts = status_line.decode(errors="replace").split(maxsplit=2)
         code = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else None
-        ok = code is not None and code < 400
+        # < 500, not < 400: a 401/403/404 still proves the backend is up and speaking HTTP
+        # correctly (e.g. an API/MCP server with no root-path route, or one that requires
+        # auth we don't have) -- only a 5xx or a failed connection means it's actually down.
+        ok = code is not None and code < 500
         return ok, round(ms, 1), (f"HTTP {code}" if code else "no response")
     except Exception as exc:
         return False, None, type(exc).__name__

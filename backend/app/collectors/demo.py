@@ -221,6 +221,33 @@ async def run(state: ClusterState):
         },
     )
 
+    # --- seed NetworkPolicies (showcases the Overview page's Network Policies card:
+    # one default-deny-all-ingress, one scoped to a specific pod selector) ---
+    state.upsert_network_policy(
+        "home/default-deny-ingress",
+        {
+            "key": "home/default-deny-ingress",
+            "name": "default-deny-ingress",
+            "namespace": "home",
+            "pod_selector": "(all pods)",
+            "policy_types": ["Ingress"],
+            "ingress_rules": 0,
+            "egress_rules": 0,
+        },
+    )
+    state.upsert_network_policy(
+        "home/allow-mqtt-from-home-assistant",
+        {
+            "key": "home/allow-mqtt-from-home-assistant",
+            "name": "allow-mqtt-from-home-assistant",
+            "namespace": "home",
+            "pod_selector": "app=mosquitto",
+            "policy_types": ["Ingress"],
+            "ingress_rules": 1,
+            "egress_rules": 0,
+        },
+    )
+
     # --- seed LoadBalancer Services (showcases the Overview page's LoadBalancer status,
     # one healthy with an assigned address, one still Pending) ---
     state.upsert_service(

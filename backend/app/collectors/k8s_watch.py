@@ -50,6 +50,9 @@ def map_node(n) -> dict:
         "cpu_capacity": (n.status.capacity or {}).get("cpu"),
         "mem_capacity": (n.status.capacity or {}).get("memory"),
         "unschedulable": bool(n.spec.unschedulable),
+        "taints": [
+            {"key": t.key, "value": t.value, "effect": t.effect} for t in (n.spec.taints or [])
+        ],
         "created": n.metadata.creation_timestamp.timestamp() if n.metadata.creation_timestamp else None,
     }
 

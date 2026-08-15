@@ -1,3 +1,9 @@
+export interface NodeTaint {
+  key: string;
+  value?: string | null;
+  effect: string;
+}
+
 export interface NodeInfo {
   name: string;
   ready: boolean;
@@ -10,6 +16,7 @@ export interface NodeInfo {
   cpu_capacity?: string;
   mem_capacity?: string;
   unschedulable?: boolean;
+  taints: NodeTaint[];
   created?: number;
 }
 

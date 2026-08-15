@@ -127,6 +127,22 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
               <table style={{ marginTop: 8 }}>
                 <tbody>
                   <tr><td className="muted">Role / IP</td><td className="num">{n.roles.join(", ")} · {n.internal_ip ?? "–"}</td></tr>
+                  <tr>
+                    <td className="muted">Schedulable</td>
+                    <td
+                      className="num"
+                      title={n.taints.map((t) => `${t.key}${t.value ? `=${t.value}` : ""}:${t.effect}`).join(", ") || undefined}
+                    >
+                      {n.unschedulable || n.taints.length > 0 ? (
+                        <span style={{ color: STATUS.warning }}>
+                          ⚠ {n.unschedulable ? "Cordoned" : "Tainted"}
+                          {n.taints.length > 0 && ` (${n.taints.length} taint${n.taints.length > 1 ? "s" : ""})`}
+                        </span>
+                      ) : (
+                        <span style={{ color: STATUS.good }}>OK</span>
+                      )}
+                    </td>
+                  </tr>
                   <tr><td className="muted">CPU / RAM</td><td className="num">{m.cpu_pct?.toFixed(0) ?? "–"} % / {m.mem_pct?.toFixed(0) ?? "–"} %</td></tr>
                   <tr><td className="muted">Temperature</td><td className="num">{m.temp_c != null ? `${m.temp_c.toFixed(1)} °C` : "–"}</td></tr>
                   <tr><td className="muted">Disk / Uptime</td><td className="num">{m.disk_used_pct != null ? `${m.disk_used_pct.toFixed(0)} %` : "–"} / {fmtUptime(m.uptime_s)}</td></tr>

@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # ==================================================================
 
 
-def _node_obj(name="pi-1", role_label=True, with_optional=True):
+def _node_obj(name="pi-1", role_label=True, with_optional=True, unschedulable=False, taints=None):
     """Build a fake kubernetes_asyncio V1Node-shaped object."""
     conditions = [types.SimpleNamespace(type="Ready", status="True")]
     labels = {"node-role.kubernetes.io/control-plane": ""} if role_label else {}
@@ -55,7 +55,7 @@ def _node_obj(name="pi-1", role_label=True, with_optional=True):
         labels=labels,
         creation_timestamp=datetime.now(timezone.utc) if with_optional else None,
     )
-    spec = types.SimpleNamespace(unschedulable=False)
+    spec = types.SimpleNamespace(unschedulable=unschedulable, taints=taints)
     return types.SimpleNamespace(status=status, metadata=metadata, spec=spec)
 
 
@@ -211,6 +211,8 @@ def test_map_node_with_role_label_and_optionals():
     assert d["internal_ip"] == "192.168.1.10"
     assert d["cpu_capacity"] == "4"
     assert d["created"] is not None
+    assert d["unschedulable"] is False
+    assert d["taints"] == []
 
 
 def test_map_node_defaults_worker_role_no_optionals():
@@ -223,6 +225,21 @@ def test_map_node_defaults_worker_role_no_optionals():
     assert d["os_image"] is None
     assert d["cpu_capacity"] is None
     assert d["created"] is None
+
+
+def test_map_node_extracts_cordon_and_taints():
+    from app.collectors.k8s_watch import map_node
+
+    taints = [
+        types.SimpleNamespace(key="dedicated", value="storage", effect="PreferNoSchedule"),
+        types.SimpleNamespace(key="node.kubernetes.io/unreachable", value=None, effect="NoExecute"),
+    ]
+    d = map_node(_node_obj(unschedulable=True, taints=taints))
+    assert d["unschedulable"] is True
+    assert d["taints"] == [
+        {"key": "dedicated", "value": "storage", "effect": "PreferNoSchedule"},
+        {"key": "node.kubernetes.io/unreachable", "value": None, "effect": "NoExecute"},
+    ]
 
 
 def test_map_pod_waiting_reason_and_ready_ratio():

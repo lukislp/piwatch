@@ -1,5 +1,35 @@
+import { useEffect, useRef, useState } from "react";
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 import { CHROME, STATUS, seriesColor, type Mode } from "./theme";
+
+// Must match .grid.tiles's gap and Tile's min width in styles.css.
+const TILE_MIN_WIDTH = 160;
+const TILE_GAP = 14;
+
+// Balances tile count across rows instead of leaving a lone remainder tile alone in the
+// last row (e.g. 7 tiles at 6-per-row -> 4+3 instead of 6+1): first finds how many tiles
+// fit per row at the container's current width (what CSS auto-fill would do on its own),
+// then spreads the tiles evenly across however many rows that implies.
+export function useBalancedTileColumns(count: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(count || 1);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || count === 0) return;
+    const update = () => {
+      const maxCols = Math.max(1, Math.floor((el.clientWidth + TILE_GAP) / (TILE_MIN_WIDTH + TILE_GAP)));
+      const rows = Math.ceil(count / Math.min(count, maxCols));
+      setColumns(Math.ceil(count / rows));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [count]);
+
+  return { ref, style: { gridTemplateColumns: `repeat(${columns}, minmax(${TILE_MIN_WIDTH}px, 1fr))` } };
+}
 
 export function Dot({ color }: { color: string }) {
   return <span className="dot" style={{ background: color }} />;

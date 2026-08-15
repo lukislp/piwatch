@@ -136,6 +136,10 @@ async def run(state: ClusterState):
     nvme_reads = {n: rng.randint(500_000, 2_000_000) for n in NODES}
     nvme_writes = {n: rng.randint(500_000, 2_000_000) for n in NODES}
 
+    # --- network throughput per node ---
+    net_rx_rate = {n: _Walker(rng.uniform(0.1, 1) * 1024**2, 0, 30 * 1024**2, 3 * 1024**2) for n in NODES}
+    net_tx_rate = {n: _Walker(rng.uniform(0.05, 0.5) * 1024**2, 0, 15 * 1024**2, 1.5 * 1024**2) for n in NODES}
+
     # --- walkers per pod (small, plausible per-container CPU/RAM usage) ---
     pod_cpu = {f"{ns}/{pod}": _Walker(rng.uniform(0.01, 0.15), 0.005, 0.6, 0.03) for ns, pod, _ in PODS}
     pod_mem = {
@@ -172,6 +176,8 @@ async def run(state: ClusterState):
                     "nvme_controller_busy_time": int((time.time() - state.started_at) / 60),
                     "nvme_read_bytes_per_s": int(read_bps),
                     "nvme_write_bytes_per_s": int(write_bps),
+                    "net_rx_bytes_per_s": int(net_rx_rate[n].next()),
+                    "net_tx_bytes_per_s": int(net_tx_rate[n].next()),
                     "undervoltage": False,
                     **nvme_static[n],
                 },

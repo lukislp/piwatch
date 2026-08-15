@@ -13,8 +13,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import importlib
+import json
 import os
 import socket
+import subprocess
 import sys
 import types
 
@@ -158,6 +160,135 @@ def test_read_uptime_s_empty_file_degrades_to_none(tmp_path, monkeypatch):
     assert node_agent.read_uptime_s() is None
 
 
+def _write_hwmon(sys_dir, hwmon_id: str, driver_name: str, files: dict[str, str]):
+    hwmon = sys_dir / "class" / "hwmon" / f"hwmon{hwmon_id}"
+    hwmon.mkdir(parents=True)
+    (hwmon / "name").write_text(driver_name)
+    for fname, content in files.items():
+        (hwmon / fname).write_text(content)
+    return hwmon
+
+
+def test_find_hwmon_matches_by_driver_name(tmp_path, monkeypatch):
+    sys_dir = tmp_path / "sys"
+    _write_hwmon(sys_dir, "0", "cpu_thermal", {})
+    nvme_hwmon = _write_hwmon(sys_dir, "1", "nvme", {})
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    # normpath: glob.glob() and pathlib's str() can mix "/" and "\\" for the
+    # same path on Windows -- functionally identical, but not `==`-comparable
+    # as raw strings. Never an issue on Linux (CI's actual target), where "/"
+    # is the only separator either side ever produces.
+    assert os.path.normpath(node_agent._find_hwmon("nvme")) == os.path.normpath(str(nvme_hwmon))
+    assert node_agent._find_hwmon("no-such-driver") is None
+
+
+def test_read_nvme_temp_c_reads_hwmon_temp1_input(tmp_path, monkeypatch):
+    sys_dir = tmp_path / "sys"
+    _write_hwmon(sys_dir, "1", "nvme", {"temp1_input": "36847"})
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    assert node_agent.read_nvme_temp_c() == 36.8
+
+
+def test_read_nvme_temp_c_returns_none_without_nvme_hwmon(tmp_path, monkeypatch):
+    monkeypatch.setattr(node_agent, "SYS", str(tmp_path / "no-sys"))
+    assert node_agent.read_nvme_temp_c() is None
+
+
+def test_read_nvme_info_extracts_model_and_capacity(tmp_path, monkeypatch):
+    sys_dir = tmp_path / "sys"
+    block = sys_dir / "block" / "nvme0n1" / "device"
+    block.mkdir(parents=True)
+    (block / "model").write_text("Intenso SSD                            \n")
+    (sys_dir / "block" / "nvme0n1" / "size").write_text("488397168")
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    info = node_agent.read_nvme_info()
+    assert info["nvme_model"] == "Intenso SSD"
+    assert info["nvme_capacity_bytes"] == 488397168 * 512  # sysfs "size" is in 512B sectors
+
+
+def test_read_nvme_info_returns_empty_dict_when_no_nvme_block_device(tmp_path, monkeypatch):
+    monkeypatch.setattr(node_agent, "SYS", str(tmp_path / "no-sys"))
+    assert node_agent.read_nvme_info() == {}
+
+
+def test_read_undervoltage_true_when_alarm_set(tmp_path, monkeypatch):
+    sys_dir = tmp_path / "sys"
+    _write_hwmon(sys_dir, "3", "rpi_volt", {"in0_lcrit_alarm": "1"})
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    assert node_agent.read_undervoltage() is True
+
+
+def test_read_undervoltage_false_when_alarm_clear(tmp_path, monkeypatch):
+    sys_dir = tmp_path / "sys"
+    _write_hwmon(sys_dir, "3", "rpi_volt", {"in0_lcrit_alarm": "0"})
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    assert node_agent.read_undervoltage() is False
+
+
+def test_read_undervoltage_none_without_rpi_volt_hwmon(tmp_path, monkeypatch):
+    monkeypatch.setattr(node_agent, "SYS", str(tmp_path / "no-sys"))
+    assert node_agent.read_undervoltage() is None
+
+
+def test_read_nvme_smart_parses_known_fields_and_drops_the_rest(monkeypatch):
+    payload = {
+        "percent_used": 3,
+        "power_on_hours": 696,
+        "unsafe_shutdowns": 21,
+        "media_errors": 0,
+        "critical_warning": 0,
+        "power_cycles": 23,
+        "data_units_read": 1454046,
+        "data_units_written": 1658016,
+        "temperature": 307,  # deliberately ignored -- sysfs hwmon is the temperature source
+        "avail_spare": 100,  # not in NVME_SMART_FIELDS -- must be dropped
+    }
+
+    def fake_run(cmd, **kwargs):
+        assert cmd[:2] == ["nvme", "smart-log"]
+        assert cmd[2] == node_agent.NVME_DEVICE
+        return types.SimpleNamespace(stdout=json.dumps(payload))
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+    assert node_agent.read_nvme_smart() == {
+        "nvme_percent_used": 3,
+        "nvme_power_on_hours": 696,
+        "nvme_unsafe_shutdowns": 21,
+        "nvme_media_errors": 0,
+        "nvme_critical_warning": 0,
+        "nvme_power_cycles": 23,
+        "nvme_data_units_read": 1454046,
+        "nvme_data_units_written": 1658016,
+    }
+
+
+def test_read_nvme_smart_returns_empty_dict_when_nvme_cli_missing(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("nvme: command not found")
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+    assert node_agent.read_nvme_smart() == {}
+
+
+def test_read_nvme_smart_returns_empty_dict_when_unprivileged(monkeypatch):
+    """Matches the real non-privileged-container behavior: nvme-cli exits
+    non-zero (EPERM opening the NVMe admin device) -> CalledProcessError."""
+
+    def fake_run(cmd, **kwargs):
+        raise subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+    assert node_agent.read_nvme_smart() == {}
+
+
+def test_read_nvme_smart_returns_empty_dict_on_malformed_json(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return types.SimpleNamespace(stdout="not json")
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+    assert node_agent.read_nvme_smart() == {}
+
+
 def _seed_full_node_agent_fs(tmp_path, monkeypatch):
     sys_dir = tmp_path / "sys"
     proc_dir = tmp_path / "proc"
@@ -193,6 +324,36 @@ def test_metrics_endpoint_full_data(tmp_path, monkeypatch):
     assert 0.0 <= body["disk_used_pct"] <= 100.0
 
 
+def test_metrics_endpoint_includes_nvme_and_power_data_when_present(tmp_path, monkeypatch):
+    """End-to-end: hwmon (nvme + rpi_volt), the nvme0n1 block device, and a
+    mocked `nvme smart-log` all merge into one /metrics payload."""
+    from fastapi.testclient import TestClient
+
+    _seed_full_node_agent_fs(tmp_path, monkeypatch)
+    sys_dir = tmp_path / "sys"
+    _write_hwmon(sys_dir, "1", "nvme", {"temp1_input": "36847"})
+    _write_hwmon(sys_dir, "3", "rpi_volt", {"in0_lcrit_alarm": "1"})
+    block = sys_dir / "block" / "nvme0n1" / "device"
+    block.mkdir(parents=True)
+    (block / "model").write_text("Intenso SSD")
+    (sys_dir / "block" / "nvme0n1" / "size").write_text("488397168")
+
+    def fake_run(cmd, **kwargs):
+        return types.SimpleNamespace(stdout=json.dumps({"percent_used": 3, "power_on_hours": 696}))
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+
+    with TestClient(node_agent.app) as client:
+        body = client.get("/metrics").json()
+
+    assert body["nvme_temp_c"] == 36.8
+    assert body["nvme_model"] == "Intenso SSD"
+    assert body["nvme_capacity_bytes"] == 488397168 * 512
+    assert body["undervoltage"] is True
+    assert body["nvme_percent_used"] == 3
+    assert body["nvme_power_on_hours"] == 696
+
+
 def test_metrics_endpoint_degrades_gracefully_when_everything_missing(
     tmp_path, monkeypatch
 ):
@@ -202,6 +363,11 @@ def test_metrics_endpoint_degrades_gracefully_when_everything_missing(
     monkeypatch.setattr(node_agent, "PROC", str(tmp_path / "no-proc"))
     monkeypatch.setattr(node_agent, "DISK_PATH", str(tmp_path / "no-disk"))
     monkeypatch.setattr(node_agent, "NODE_NAME", "pi-empty")
+
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("nvme: command not found")
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
 
     with TestClient(node_agent.app) as client:
         body = client.get("/metrics").json()
@@ -215,6 +381,8 @@ def test_metrics_endpoint_degrades_gracefully_when_everything_missing(
         "mem_available_kb": None,
         "disk_used_pct": None,
         "uptime_s": None,
+        "nvme_temp_c": None,
+        "undervoltage": None,
     }
 
 

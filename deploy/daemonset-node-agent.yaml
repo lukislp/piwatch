@@ -24,15 +24,17 @@ spec:
         - name: agent
           image: registry.example.com/your-namespace/piwatch:latest
           command: ["uvicorn", "app.node_agent:app", "--host", "0.0.0.0", "--port", "9101"]
-          # allowPrivilegeEscalation: false is safe regardless of root/non-root status. NO
-          # capabilities drop here (unlike the piwatch Deployment): this container reads
-          # /host/proc, /host/sys, /host/root as root WITHOUT its own USER directive in the
-          # image - without CAP_DAC_OVERRIDE, root would go through the same file permission
-          # checks as a regular user, which could cause new read gaps on individual
-          # non-world-readable /proc paths (e.g. other UIDs) - not verifiable live without
-          # production risk, so only the risk-free half of the hardening was applied here.
+          # privileged: true is required ONLY for the NVMe SMART reader (node_agent.py's
+          # read_nvme_smart(), via nvme-cli): the NVMe admin passthrough ioctl it issues is
+          # gated by CAP_SYS_ADMIN/the device cgroup regardless of file permissions on
+          # /dev/nvme0 - confirmed live (EPERM as root, non-privileged) before adding this.
+          # This is a materially bigger privilege footprint than the rest of the agent
+          # (everything else here is unprivileged, read-only sysfs/procfs access) - if you'd
+          # rather not grant it, drop `privileged: true` and the `dev` volume/mount below;
+          # temperature, model, capacity and the under-voltage flag all keep working from
+          # plain sysfs, only the SMART fields (wear %, power-on hours, ...) go missing.
           securityContext:
-            allowPrivilegeEscalation: false
+            privileged: true
           ports:
             - containerPort: 9101
           env:
@@ -41,10 +43,12 @@ spec:
             - { name: PIWATCH_SYS, value: /host/sys }
             - { name: PIWATCH_PROC, value: /host/proc }
             - { name: PIWATCH_DISK_PATH, value: /host/root }
+            - { name: PIWATCH_NVME_DEVICE, value: /host/dev/nvme0 }
           volumeMounts:
             - { name: sys, mountPath: /host/sys, readOnly: true }
             - { name: proc, mountPath: /host/proc, readOnly: true }
             - { name: root, mountPath: /host/root, readOnly: true }
+            - { name: dev, mountPath: /host/dev }
           resources:
             requests: { cpu: 10m, memory: 32Mi }
             limits: { cpu: 100m, memory: 64Mi }
@@ -55,3 +59,4 @@ spec:
         - { name: sys, hostPath: { path: /sys } }
         - { name: proc, hostPath: { path: /proc } }
         - { name: root, hostPath: { path: / } }
+        - { name: dev, hostPath: { path: /dev } }

@@ -36,6 +36,8 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       <div className="grid cards">
         {nodes.sort((a, b) => a.name.localeCompare(b.name)).map((n) => {
           const m = snap.node_metrics[n.name] ?? {};
+          const hw = snap.hardware[n.name] ?? {};
+          const nvmeWarn = !!hw.nvme_critical_warning || !!hw.nvme_media_errors;
           return (
             <div className="card" key={n.name}>
               <div className="row" style={{ justifyContent: "space-between" }}>
@@ -48,6 +50,24 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
                   <tr><td className="muted">CPU / RAM</td><td className="num">{m.cpu_pct?.toFixed(0) ?? "–"} % / {m.mem_pct?.toFixed(0) ?? "–"} %</td></tr>
                   <tr><td className="muted">Temperature</td><td className="num">{m.temp_c != null ? `${m.temp_c.toFixed(1)} °C` : "–"}</td></tr>
                   <tr><td className="muted">Disk / Uptime</td><td className="num">{m.disk_used_pct != null ? `${m.disk_used_pct.toFixed(0)} %` : "–"} / {fmtUptime(m.uptime_s)}</td></tr>
+                  {hw.undervoltage != null && (
+                    <tr>
+                      <td className="muted">Power</td>
+                      <td className="num">
+                        {hw.undervoltage ? <span style={{ color: STATUS.critical }}>⚠ Undervoltage</span> : "OK"}
+                      </td>
+                    </tr>
+                  )}
+                  {hw.nvme_temp_c != null && (
+                    <tr>
+                      <td className="muted">NVMe</td>
+                      <td className="num">
+                        {hw.nvme_temp_c.toFixed(1)} °C
+                        {hw.nvme_percent_used != null ? ` · ${hw.nvme_percent_used}% worn` : ""}
+                        {nvmeWarn && <span style={{ color: STATUS.critical }}> ⚠</span>}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

@@ -22,6 +22,7 @@ cluster involved.
 ## Features
 
 - **Kubernetes live**: nodes, pods, deployments, events via the watch API (no polling)
+- **Per-pod CPU/RAM usage**: live usage per pod/workload via metrics-server, right in the Workloads table
 - **Pi hardware**: CPU temperature, load, RAM, disk, uptime per node (DaemonSet agent)
 - **Metrics**: CPU/RAM usage via metrics-server (bundled with k3s), ~3h history
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history

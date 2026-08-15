@@ -25,6 +25,10 @@ export interface PodInfo {
   containers: string[];
   images: string[];
   oom_killed: boolean;
+  /** Reason/exit code of the most recent container termination (current or
+   * last_state, whichever is more current) -- null if never terminated. */
+  last_exit_reason?: string | null;
+  last_exit_code?: number | null;
   created?: number;
 }
 

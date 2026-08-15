@@ -45,6 +45,14 @@ function capacityTone(pct: number): "good" | "warning" | "critical" {
   return "good";
 }
 
+// Kubelet-reported node conditions where "True" is bad (unlike Ready, where "True" is
+// good) -- an early-warning signal for node health beyond plain Ready/NotReady.
+const PRESSURE_CONDITIONS = ["MemoryPressure", "DiskPressure", "PIDPressure"];
+
+function activePressure(conditions: Record<string, string>): string[] {
+  return PRESSURE_CONDITIONS.filter((c) => conditions[c] === "True");
+}
+
 // Both numbers share one unit (e.g. "11/24 GB") so the tile value stays short
 // enough not to wrap in the fixed-width tiles grid.
 function fmtBytesPair(used: number, total: number): string {
@@ -101,6 +109,7 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
           const hw = snap.hardware[n.name] ?? {};
           const nvmeError =
             !!hw.nvme_critical_warning || !!hw.nvme_media_errors || !!hw.nvme_num_err_log_entries;
+          const pressure = activePressure(n.conditions);
           return (
             <div className="card" key={n.name}>
               <div className="row" style={{ justifyContent: "space-between" }}>
@@ -113,6 +122,16 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
                   <tr><td className="muted">CPU / RAM</td><td className="num">{m.cpu_pct?.toFixed(0) ?? "–"} % / {m.mem_pct?.toFixed(0) ?? "–"} %</td></tr>
                   <tr><td className="muted">Temperature</td><td className="num">{m.temp_c != null ? `${m.temp_c.toFixed(1)} °C` : "–"}</td></tr>
                   <tr><td className="muted">Disk / Uptime</td><td className="num">{m.disk_used_pct != null ? `${m.disk_used_pct.toFixed(0)} %` : "–"} / {fmtUptime(m.uptime_s)}</td></tr>
+                  <tr>
+                    <td className="muted">Pressure</td>
+                    <td className="num">
+                      {pressure.length === 0 ? (
+                        <span style={{ color: STATUS.good }}>OK</span>
+                      ) : (
+                        <span style={{ color: STATUS.critical }}>⚠ {pressure.join(", ")}</span>
+                      )}
+                    </td>
+                  </tr>
                   {hw.undervoltage != null && (
                     <tr>
                       <td className="muted">Power</td>
@@ -770,7 +789,17 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
                     )}
                   </td>
                   <td className="num">{p.ready}</td>
-                  <td className="num" style={p.restarts > 3 ? { color: STATUS.warning } : undefined}>{p.restarts}</td>
+                  <td
+                    className="num"
+                    style={p.restarts > 3 ? { color: STATUS.warning } : undefined}
+                    title={
+                      p.restarts > 0 && p.last_exit_reason
+                        ? `Last: ${p.last_exit_reason}${p.last_exit_code != null ? ` (exit ${p.last_exit_code})` : ""}`
+                        : undefined
+                    }
+                  >
+                    {p.restarts}
+                  </td>
                   <td className="num muted">{m?.cpu_cores != null ? `${Math.round(m.cpu_cores * 1000)}m` : "–"}</td>
                   <td className="num muted">{m?.mem_bytes != null ? `${Math.round(m.mem_bytes / 1024 / 1024)}Mi` : "–"}</td>
                   <td className="num muted">{fmtAge(p.created)}</td>

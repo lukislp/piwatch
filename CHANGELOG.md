@@ -1,3 +1,10 @@
+# [1.18.0](https://github.com/lukislp/piwatch/compare/v1.17.1...v1.18.0) (2026-08-15)
+
+
+### Features
+
+* auto-generate healthchecks from discovered routes/Services ([ee33dcf](https://github.com/lukislp/piwatch/commit/ee33dcf527623e316a48ce2ff174aab833d2f71b))
+
 ## [1.17.1](https://github.com/lukislp/piwatch/compare/v1.17.0...v1.17.1) (2026-08-15)
 
 

@@ -1,3 +1,12 @@
+# [1.6.0](https://github.com/lukislp/piwatch/compare/v1.5.1...v1.6.0) (2026-08-15)
+
+
+### Features
+
+* detect Deployment rollout drift ([7817783](https://github.com/lukislp/piwatch/commit/7817783bf0b776ca257b5abf31d18f13cc009072))
+* show Flux Kustomization GitOps sync status ([10c3aab](https://github.com/lukislp/piwatch/commit/10c3aab0d92e14530de4a93bdb82835067aafbb3))
+* show per-node network throughput ([c82c80d](https://github.com/lukislp/piwatch/commit/c82c80d114a45f450ab98144b5f5ae97edf073cb))
+
 ## [1.5.1](https://github.com/lukislp/piwatch/compare/v1.5.0...v1.5.1) (2026-08-15)
 
 

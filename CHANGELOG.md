@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/lukislp/piwatch/compare/v1.7.1...v1.8.0) (2026-08-15)
+
+
+### Features
+
+* show a live countdown to the next Flux reconcile ([0f92cff](https://github.com/lukislp/piwatch/commit/0f92cff1992a2c1905cb0947cccb446fa1751b52))
+
 ## [1.7.1](https://github.com/lukislp/piwatch/compare/v1.7.0...v1.7.1) (2026-08-15)
 
 

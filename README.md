@@ -48,7 +48,11 @@ cluster involved.
 - **PVC storage usage**: a "Storage" card on the Workloads page lists every PersistentVolumeClaim
   with its status, storage class and capacity. Usage % additionally needs
   [Prometheus](https://prometheus.io/) scraping kubelet (set `PIWATCH_PROMETHEUS_URL`) -- without
-  it, the card still shows capacity/binding metadata, just no usage column
+  it, the card still shows capacity/binding metadata, just no usage column. Note: storage classes
+  without real per-volume quotas (e.g. `local-path-provisioner`, k3s's own default) can't report
+  meaningful usage at all -- kubelet falls back to the underlying node disk's stats instead, so
+  PiWatch detects and discards that case too (usage stays blank rather than showing a
+  wrong number)
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Live logs** for any pod, right in the browser
 - **Simple auth**: password from a Kubernetes Secret, signed tokens (failover-friendly)

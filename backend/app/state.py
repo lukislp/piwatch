@@ -47,6 +47,10 @@ class ClusterState:
         # Healthchecks: name -> {config, last, history: deque[{t, ok, ms}]}
         self.healthchecks: dict[str, dict[str, Any]] = {}
 
+        # Flux Kustomization sync status (ns/name -> mapped status dict). Optional --
+        # stays empty on clusters that don't run Flux; see collectors/flux.py.
+        self.flux_kustomizations: dict[str, dict[str, Any]] = {}
+
         self._subscribers: set[asyncio.Queue] = set()
 
     # ---------------- pub/sub ----------------
@@ -138,6 +142,13 @@ class ClusterState:
         # history itself still only picks out a few chartable fields regardless of what's here.
         self.record_node_sample(node, data)
 
+    def set_flux_kustomizations(self, items: dict[str, dict]) -> None:
+        """Full replace on every poll -- the live set is small (a handful of
+        Kustomizations at most), so this is simpler than incremental add/remove
+        tracking and self-heals deletions without extra bookkeeping."""
+        self.flux_kustomizations = items
+        self.publish("flux_kustomizations", items)
+
     def record_check(self, name: str, config: dict, ok: bool, latency_ms: float | None, detail: str = "") -> None:
         entry = self.healthchecks.setdefault(
             name, {"config": config, "history": deque(maxlen=CHECK_HISTORY_LEN)}
@@ -165,6 +176,7 @@ class ClusterState:
             "node_metrics": self.node_metrics,
             "hardware": self.hardware,
             "pod_metrics": self.pod_metrics,
+            "flux_kustomizations": self.flux_kustomizations,
             "node_history": {k: list(v) for k, v in self.node_history.items()},
             "healthchecks": {
                 name: {

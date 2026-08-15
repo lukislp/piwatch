@@ -3,7 +3,8 @@
 Serves the REST API + WebSockets and the built React frontend as static
 files. On startup, the lifespan launches the collectors:
 
-- real mode: Kubernetes watchers, metrics-server poller, hardware poller
+- real mode: Kubernetes watchers, metrics-server poller, hardware poller,
+  Flux Kustomization poller (optional -- degrades quietly if Flux isn't installed)
 - demo mode (PIWATCH_DEMO=1 or no cluster reachable): simulator
 
 Run locally:  PIWATCH_DEMO=1 uvicorn app.main:app --reload
@@ -21,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import auth, ws
-from .collectors import demo, hardware, healthcheck, k8s_watch, metrics
+from .collectors import demo, flux, hardware, healthcheck, k8s_watch, metrics
 from .state import state
 
 logging.basicConfig(level=os.environ.get("PIWATCH_LOG_LEVEL", "INFO"))
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(k8s_watch.run(state)))
         tasks.append(asyncio.create_task(metrics.run(state)))
         tasks.append(asyncio.create_task(hardware.run(state)))
+        tasks.append(asyncio.create_task(flux.run(state)))
     tasks.append(asyncio.create_task(healthcheck.run(state)))
     try:
         yield

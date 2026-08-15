@@ -1081,6 +1081,26 @@ def test_record_hardware_publishes_full_sample_not_just_the_chartable_fields():
     asyncio.run(scenario())
 
 
+def test_set_flux_kustomizations_replaces_and_publishes():
+    async def scenario():
+        st = ClusterState()
+        q = st.subscribe()
+        st.set_flux_kustomizations({"flux-system/a": {"key": "flux-system/a", "ready": True}})
+        msg = q.get_nowait()
+        assert msg["type"] == "flux_kustomizations"
+        assert "flux-system/a" in msg["data"]
+        assert "flux-system/a" in st.flux_kustomizations
+        assert "flux_kustomizations" in st.snapshot()
+
+        # a second call fully replaces the set -- deletions self-heal without
+        # needing a separate remove_* method
+        st.set_flux_kustomizations({"flux-system/b": {"key": "flux-system/b", "ready": False}})
+        assert "flux-system/a" not in st.flux_kustomizations
+        assert "flux-system/b" in st.flux_kustomizations
+
+    asyncio.run(scenario())
+
+
 def test_record_pod_sample_and_remove_pod_clears_metrics():
     async def scenario():
         st = ClusterState()

@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/lukislp/piwatch/compare/v1.7.0...v1.7.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* rollout-drift false positive for sibling deployments sharing a name prefix ([6a5f56a](https://github.com/lukislp/piwatch/commit/6a5f56adc83150d90bfb8963c68914ce6a88a009))
+
 # [1.7.0](https://github.com/lukislp/piwatch/compare/v1.6.0...v1.7.0) (2026-08-15)
 
 

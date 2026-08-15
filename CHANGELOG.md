@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/lukislp/piwatch/compare/v1.14.0...v1.15.0) (2026-08-15)
+
+
+### Features
+
+* show node pressure conditions and pod restart reason/exit code ([6507d05](https://github.com/lukislp/piwatch/commit/6507d055cec13292c650bd6d9faf7f16a8eac9c2))
+
 # [1.14.0](https://github.com/lukislp/piwatch/compare/v1.13.0...v1.14.0) (2026-08-15)
 
 

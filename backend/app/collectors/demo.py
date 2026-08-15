@@ -111,6 +111,13 @@ async def run(state: ClusterState):
     temp = {n: _Walker(rng.uniform(45, 55), 35, 78, 1.5) for n in NODES}
     disk = {n: _Walker(rng.uniform(30, 55), 10, 95, 0.3) for n in NODES}
 
+    # --- walkers per pod (small, plausible per-container CPU/RAM usage) ---
+    pod_cpu = {f"{ns}/{pod}": _Walker(rng.uniform(0.01, 0.15), 0.005, 0.6, 0.03) for ns, pod, _ in PODS}
+    pod_mem = {
+        f"{ns}/{pod}": _Walker(rng.uniform(30, 150) * 1024**2, 16 * 1024**2, 400 * 1024**2, 8 * 1024**2)
+        for ns, pod, _ in PODS
+    }
+
     tick = 0
     while True:
         for n in NODES:
@@ -125,6 +132,11 @@ async def run(state: ClusterState):
                     "load1": round(cpu[n].value / 25, 2),
                     "uptime_s": int(time.time() - state.started_at) + 86400 * 12,
                 },
+            )
+        for ns, pod, _ in PODS:
+            key = f"{ns}/{pod}"
+            state.record_pod_sample(
+                key, {"cpu_cores": round(pod_cpu[key].next(), 3), "mem_bytes": int(pod_mem[key].next())}
             )
         # occasionally emit an event / a pod restart
         if tick % 6 == 0:

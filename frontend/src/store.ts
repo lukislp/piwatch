@@ -60,8 +60,12 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
     case "pod_deleted": {
       const pods = { ...snap.pods };
       delete pods[d.key];
-      return { ...snap, pods };
+      const pod_metrics = { ...snap.pod_metrics };
+      delete pod_metrics[d.key];
+      return { ...snap, pods, pod_metrics };
     }
+    case "pod_metrics":
+      return { ...snap, pod_metrics: { ...snap.pod_metrics, [d.key]: d } };
     case "deployment":
       return { ...snap, deployments: { ...snap.deployments, [d.key]: d } };
     case "deployment_deleted": {

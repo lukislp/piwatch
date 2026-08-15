@@ -48,6 +48,11 @@ spec:
               value: /config/healthchecks.yaml
             - name: PIWATCH_AGENT_SERVICE
               value: piwatch-node-agent.monitoring.svc.cluster.local
+            # Auto-generates healthchecks from discovered HTTPRoutes/LoadBalancer Services
+            # (see collectors/autochecks.py) -- additive to PIWATCH_CHECKS_FILE, needs no
+            # extra RBAC (only reads already-collected state, makes no K8s API calls of its own).
+            - name: PIWATCH_AUTO_HEALTHCHECKS
+              value: "1"
             # Optional (see collectors/pvc.py): enables PVC usage % on the Storage card. Remove
             # this line if your cluster doesn't run Prometheus -- capacity/status still show
             # without it, just no usage column. Needs a matching NetworkPolicy ingress rule on

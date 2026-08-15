@@ -142,6 +142,7 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       </div>
       <GitOpsStatus snap={snap} />
       <ImageAutomationStatus snap={snap} />
+      <GatewayStatus snap={snap} />
     </>
   );
 }
@@ -342,6 +343,91 @@ function ImageAutomationStatus({ snap }: { snap: Snapshot }) {
                 <td className="num muted">{fmtAge(a.last_push_time ? Date.parse(a.last_push_time) / 1000 : undefined)}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// ---------------- Gateway API routing status ----------------
+// Hidden entirely when empty, same reasoning as GitOpsStatus: most piwatch users don't
+// use the Gateway API.
+function GatewayStatus({ snap }: { snap: Snapshot }) {
+  const gateways = Object.values(snap.gateways).sort((a, b) => a.name.localeCompare(b.name));
+  const routes = Object.values(snap.http_routes).sort((a, b) => a.key.localeCompare(b.key));
+  if (gateways.length === 0 && routes.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Gateway API</h2>
+      {gateways.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Gateway</th>
+              <th>Namespace</th>
+              <th>Class</th>
+              <th>Status</th>
+              <th>Address</th>
+              <th className="num">Listeners</th>
+            </tr>
+          </thead>
+          <tbody>
+            {gateways.map((g) => (
+              <tr key={g.key}>
+                <td>
+                  <Dot color={g.ready ? STATUS.good : STATUS.critical} />
+                  {g.name}
+                </td>
+                <td className="muted">{g.namespace}</td>
+                <td className="muted">{g.gateway_class_name ?? "–"}</td>
+                <td>
+                  {g.ready ? "Programmed" : (g.reason ?? "Not programmed")}
+                </td>
+                <td className="mono muted">{g.addresses.join(", ") || "–"}</td>
+                <td className="num muted">
+                  {g.listeners_ready}/{g.listener_count} ({g.attached_routes} routes)
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {routes.length > 0 && (
+        <table style={{ marginTop: gateways.length > 0 ? 12 : 0 }}>
+          <thead>
+            <tr>
+              <th>Route</th>
+              <th>Namespace</th>
+              <th>Hostnames</th>
+              <th>Gateway</th>
+              <th>Backends</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {routes.map((r) => {
+              const problem = !r.accepted || !r.resolved_refs;
+              return (
+                <tr key={r.key}>
+                  <td>{r.name}</td>
+                  <td className="muted">{r.namespace}</td>
+                  <td className="mono muted">{r.hostnames.join(", ") || "–"}</td>
+                  <td className="muted">{r.parent_names.join(", ") || "–"}</td>
+                  <td className="mono muted">{r.backend_names.join(", ") || "–"}</td>
+                  <td>
+                    <Dot color={!problem ? STATUS.good : STATUS.critical} />
+                    {!problem ? (
+                      "OK"
+                    ) : (
+                      <span title={r.message ?? undefined}>
+                        {!r.resolved_refs ? "⚠ backend not resolved" : (r.reason ?? "⚠ not accepted")}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

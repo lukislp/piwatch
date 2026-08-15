@@ -156,6 +156,68 @@ async def run(state: ClusterState):
             },
         )
 
+    # --- seed Gateway API routing status (showcases the Gateway section even though
+    # there's no real Gateway API/cluster behind demo mode) ---
+    state.set_gateways(
+        {
+            "nginx-gateway/demo-gateway": {
+                "key": "nginx-gateway/demo-gateway",
+                "name": "demo-gateway",
+                "namespace": "nginx-gateway",
+                "gateway_class_name": "nginx",
+                "ready": True,
+                "reason": "Programmed",
+                "message": "The Gateway is programmed",
+                "addresses": ["192.168.1.50"],
+                "listener_count": 3,
+                "listeners_ready": 3,
+                "attached_routes": 3,
+            },
+        }
+    )
+    state.set_http_routes(
+        {
+            "monitoring/piwatch": {
+                "key": "monitoring/piwatch",
+                "name": "piwatch",
+                "namespace": "monitoring",
+                "hostnames": ["piwatch.demo.invalid"],
+                "parent_names": ["demo-gateway"],
+                "backend_names": ["piwatch"],
+                "accepted": True,
+                "resolved_refs": True,
+                "reason": None,
+                "message": None,
+            },
+            "home/home-assistant": {
+                "key": "home/home-assistant",
+                "name": "home-assistant",
+                "namespace": "home",
+                "hostnames": ["home.demo.invalid"],
+                "parent_names": ["demo-gateway"],
+                "backend_names": ["home-assistant"],
+                "accepted": True,
+                "resolved_refs": True,
+                "reason": None,
+                "message": None,
+            },
+            # deliberately broken -- showcases the "route points at a Service that
+            # doesn't resolve" failure mode a Deployment/Pod-only view can't catch.
+            "home/mosquitto": {
+                "key": "home/mosquitto",
+                "name": "mosquitto",
+                "namespace": "home",
+                "hostnames": ["mqtt.demo.invalid"],
+                "parent_names": ["demo-gateway"],
+                "backend_names": ["mosquitto-mqtt"],
+                "accepted": True,
+                "resolved_refs": False,
+                "reason": "BackendNotFound",
+                "message": "service \"mosquitto-mqtt\" not found",
+            },
+        }
+    )
+
     # --- seed Flux Kustomization sync status (showcases the GitOps section even
     # though there's no real Flux/cluster behind demo mode) ---
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

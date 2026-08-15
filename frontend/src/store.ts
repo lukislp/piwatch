@@ -139,7 +139,7 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
       return { ...snap, http_routes: d };
     case "healthcheck": {
       const name = d.name as string;
-      const entry = snap.healthchecks[name] ?? { config: { name }, history: [] };
+      const entry = snap.healthchecks[name] ?? { config: d.config ?? { name }, history: [] };
       const result = { t: d.t ?? msg.t, ok: d.ok, ms: d.ms, detail: d.detail };
       return {
         ...snap,
@@ -147,6 +147,7 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
           ...snap.healthchecks,
           [name]: {
             ...entry,
+            config: d.config ?? entry.config,
             last: result,
             uptime_pct: d.uptime_pct ?? entry.uptime_pct,
             history: [...entry.history.slice(-499), result],

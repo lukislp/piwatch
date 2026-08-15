@@ -235,7 +235,13 @@ class ClusterState:
         history = entry["history"]
         up = sum(1 for r in history if r["ok"])
         entry["uptime_pct"] = round(100.0 * up / len(history), 2)
-        self.publish("healthcheck", {"name": name, **result, "uptime_pct": entry["uptime_pct"]})
+        # config included every time, not just in the full snapshot: a check whose target was
+        # only just discovered (autochecks.py) can have its first-ever result delivered as a
+        # WS delta before any client has seen a full snapshot containing it, so the config
+        # can't be assumed already known client-side.
+        self.publish(
+            "healthcheck", {"name": name, "config": config, **result, "uptime_pct": entry["uptime_pct"]}
+        )
 
     def remove_check(self, name: str) -> None:
         """Only used by collectors/autochecks.py: an auto-discovered check (its target

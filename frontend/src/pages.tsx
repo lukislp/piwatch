@@ -171,6 +171,7 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       <ImageAutomationStatus snap={snap} />
       <GatewayStatus snap={snap} />
       <LoadBalancerStatus snap={snap} />
+      <NetworkPolicies snap={snap} />
     </>
   );
 }
@@ -502,6 +503,43 @@ function LoadBalancerStatus({ snap }: { snap: Snapshot }) {
               </tr>
             );
           })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------------- NetworkPolicies ----------------
+// Hidden entirely when empty, same reasoning as LoadBalancerStatus: not every cluster
+// (or namespace) uses NetworkPolicies at all.
+function NetworkPolicies({ snap }: { snap: Snapshot }) {
+  const policies = Object.values(snap.network_policies).sort((a, b) => a.key.localeCompare(b.key));
+  if (policies.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Network Policies</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Namespace</th>
+            <th>Pod selector</th>
+            <th>Types</th>
+            <th className="num">Ingress rules</th>
+            <th className="num">Egress rules</th>
+          </tr>
+        </thead>
+        <tbody>
+          {policies.map((p) => (
+            <tr key={p.key}>
+              <td>{p.name}</td>
+              <td className="muted">{p.namespace}</td>
+              <td className="mono muted">{p.pod_selector}</td>
+              <td className="muted">{p.policy_types.join(", ") || "–"}</td>
+              <td className="num">{p.ingress_rules}</td>
+              <td className="num">{p.egress_rules}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

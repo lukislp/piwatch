@@ -209,6 +209,23 @@ def map_pv(v) -> dict:
     }
 
 
+def map_network_policy(np) -> dict:
+    # match_expressions (set-based selectors) are ignored -- rare in practice for the
+    # simple allow/deny-by-label policies a homelab cluster typically has; a policy using
+    # only those just shows "(all pods)" here, same as no selector at all.
+    match_labels = (np.spec.pod_selector.match_labels if np.spec.pod_selector else None) or {}
+    pod_selector = ", ".join(f"{k}={v}" for k, v in match_labels.items()) or "(all pods)"
+    return {
+        "key": f"{np.metadata.namespace}/{np.metadata.name}",
+        "name": np.metadata.name,
+        "namespace": np.metadata.namespace,
+        "pod_selector": pod_selector,
+        "policy_types": list(np.spec.policy_types or []),
+        "ingress_rules": len(np.spec.ingress or []),
+        "egress_rules": len(np.spec.egress or []),
+    }
+
+
 def map_event(e) -> dict:
     ts = e.last_timestamp or e.event_time or e.metadata.creation_timestamp
     return {
@@ -236,6 +253,7 @@ async def _watch_loop(state: ClusterState, kind: str):
                 v1 = client.CoreV1Api(api_client)
                 apps = client.AppsV1Api(api_client)
                 autoscaling = client.AutoscalingV2Api(api_client)
+                networking = client.NetworkingV1Api(api_client)
 
                 if kind == "nodes":
                     lister, mapper = v1.list_node, map_node
@@ -251,6 +269,8 @@ async def _watch_loop(state: ClusterState, kind: str):
                     lister, mapper = v1.list_service_for_all_namespaces, map_service
                 elif kind == "hpas":
                     lister, mapper = autoscaling.list_horizontal_pod_autoscaler_for_all_namespaces, map_hpa
+                elif kind == "networkpolicies":
+                    lister, mapper = networking.list_network_policy_for_all_namespaces, map_network_policy
                 elif kind == "persistentvolumes":
                     lister, mapper = v1.list_persistent_volume, map_pv
                 elif kind == "events":
@@ -301,6 +321,8 @@ def _apply(state: ClusterState, kind: str, ev_type: str, obj: dict) -> None:
             state.upsert_service(obj["key"], obj)
     elif kind == "hpas":
         state.remove_hpa(obj["key"]) if deleted else state.upsert_hpa(obj["key"], obj)
+    elif kind == "networkpolicies":
+        state.remove_network_policy(obj["key"]) if deleted else state.upsert_network_policy(obj["key"], obj)
     elif kind == "persistentvolumes":
         # Only "Released"/"Failed" PVs are orphaned/need-attention -- a PV that gets
         # rebound (rare, but possible) must be actively removed, not left stale, since
@@ -324,6 +346,7 @@ async def run(state: ClusterState):
         _watch_loop(state, "daemonsets"),
         _watch_loop(state, "services"),
         _watch_loop(state, "hpas"),
+        _watch_loop(state, "networkpolicies"),
         _watch_loop(state, "persistentvolumes"),
         _watch_loop(state, "events"),
     )

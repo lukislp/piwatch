@@ -68,6 +68,10 @@ cluster involved.
 - **LoadBalancer Service status**: a card on the Overview page lists every `type: LoadBalancer`
   Service with its cluster/external IP and ports, flagging any still stuck waiting for an
   address (e.g. no free IP left in your MetalLB pool). Stays hidden if you don't run any
+- **Network Policies**: a card on the Overview page lists every NetworkPolicy with its pod
+  selector, Ingress/Egress types and rule counts -- a quick overview of what's restricted
+  where, without `kubectl get networkpolicy -A` across every namespace. Stays hidden if you
+  don't use any
 - **PVC storage usage**: a "Storage" card on the Workloads page lists every PersistentVolumeClaim
   with its status, storage class and capacity. Usage % additionally needs
   [Prometheus](https://prometheus.io/) scraping kubelet (set `PIWATCH_PROMETHEUS_URL`) -- without

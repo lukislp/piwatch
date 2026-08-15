@@ -166,6 +166,19 @@ def _hpa_obj(
     return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
 
 
+def _networkpolicy_obj(
+    name="np1", namespace="default", match_labels=None,
+    policy_types=("Ingress",), ingress=(), egress=(),
+):
+    pod_selector = types.SimpleNamespace(match_labels=match_labels)
+    metadata = types.SimpleNamespace(name=name, namespace=namespace)
+    spec = types.SimpleNamespace(
+        pod_selector=pod_selector, policy_types=list(policy_types),
+        ingress=list(ingress), egress=list(egress),
+    )
+    return types.SimpleNamespace(metadata=metadata, spec=spec)
+
+
 def _pv_obj(
     name="pv1", phase="Released", capacity="5Gi", storage_class="local-path",
     reclaim_policy="Retain", claim_namespace="home", claim_name="old-claim",
@@ -389,6 +402,28 @@ def test_map_hpa_ignores_non_resource_metrics():
     assert d["current_metrics"] == []
 
 
+def test_map_network_policy_extracts_selector_types_and_rule_counts():
+    from app.collectors.k8s_watch import map_network_policy
+
+    obj = _networkpolicy_obj(
+        match_labels={"app": "mosquitto"}, policy_types=["Ingress", "Egress"],
+        ingress=[object()], egress=[object(), object()],
+    )
+    d = map_network_policy(obj)
+    assert d["key"] == "default/np1"
+    assert d["pod_selector"] == "app=mosquitto"
+    assert d["policy_types"] == ["Ingress", "Egress"]
+    assert d["ingress_rules"] == 1
+    assert d["egress_rules"] == 2
+
+
+def test_map_network_policy_no_selector_labels_means_all_pods():
+    from app.collectors.k8s_watch import map_network_policy
+
+    d = map_network_policy(_networkpolicy_obj(match_labels=None))
+    assert d["pod_selector"] == "(all pods)"
+
+
 def test_map_pv_extracts_phase_capacity_and_stale_claim_ref():
     from app.collectors.k8s_watch import map_pv
 
@@ -464,6 +499,11 @@ def test_apply_all_kinds_upsert_and_delete():
     assert "ns/h1" in st.hpas
     _apply(st, "hpas", "DELETED", {"key": "ns/h1"})
     assert "ns/h1" not in st.hpas
+
+    _apply(st, "networkpolicies", "ADDED", {"key": "ns/np1"})
+    assert "ns/np1" in st.network_policies
+    _apply(st, "networkpolicies", "DELETED", {"key": "ns/np1"})
+    assert "ns/np1" not in st.network_policies
 
     _apply(st, "persistentvolumes", "ADDED", {"key": "pv1", "phase": "Released"})
     assert "pv1" in st.orphaned_pvs
@@ -565,7 +605,7 @@ class _FakeWatch:
 
 def _patch_k8s_client(
     monkeypatch, nodes=None, pods=None, deployments=None, statefulsets=None, daemonsets=None,
-    services=None, hpas=None, persistentvolumes=None, events=None,
+    services=None, hpas=None, networkpolicies=None, persistentvolumes=None, events=None,
 ):
     """Patch kubernetes_asyncio.client's Api classes used by _watch_loop."""
     from kubernetes_asyncio import client as kclient
@@ -609,10 +649,18 @@ def _patch_k8s_client(
         async def list_horizontal_pod_autoscaler_for_all_namespaces(self):
             return _FakeList(hpas or [])
 
+    class _FakeNetworkingV1Api:
+        def __init__(self, api_client):
+            pass
+
+        async def list_network_policy_for_all_namespaces(self):
+            return _FakeList(networkpolicies or [])
+
     monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
     monkeypatch.setattr(kclient, "CoreV1Api", _FakeCoreV1Api)
     monkeypatch.setattr(kclient, "AppsV1Api", _FakeAppsV1Api)
     monkeypatch.setattr(kclient, "AutoscalingV2Api", _FakeAutoscalingV2Api)
+    monkeypatch.setattr(kclient, "NetworkingV1Api", _FakeNetworkingV1Api)
 
 
 @pytest.mark.parametrize(
@@ -702,6 +750,39 @@ def test_watch_loop_seeds_orphaned_pvs_then_reconnects_on_drop(monkeypatch):
     assert sleep_calls == [1]
 
 
+def test_watch_loop_seeds_network_policies_then_reconnects_on_drop(monkeypatch):
+    """Same as test_watch_loop_seeds_orphaned_pvs above: "networkpolicies" (the k8s
+    kind, matching kubectl's own plural) maps to st.network_policies (Python
+    snake_case), so the generic getattr(st, kind) pattern doesn't apply here either."""
+    from kubernetes_asyncio import watch as kwatch
+
+    from app.collectors import k8s_watch
+    from app.state import ClusterState
+
+    _patch_k8s_client(monkeypatch, networkpolicies=[_networkpolicy_obj(name="np1")])
+
+    added = {"type": "ADDED", "object": _networkpolicy_obj(name="np2")}
+    fake_watch_cls = type(
+        "FakeWatch", (_FakeWatch,), {"events": [added], "error": RuntimeError("410 Gone")}
+    )
+    monkeypatch.setattr(kwatch, "Watch", fake_watch_cls)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(k8s_watch.asyncio, "sleep", fake_sleep)
+
+    st = ClusterState()
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(k8s_watch._watch_loop(st, "networkpolicies"))
+
+    assert set(st.network_policies) == {"default/np1", "default/np2"}
+    assert sleep_calls == [1]
+
+
 def test_watch_loop_unknown_kind_raises_value_error_and_backs_off(monkeypatch):
     """kind not in {nodes,pods,deployments,events} -> ValueError, caught by the
     generic except, triggering the same backoff/reconnect path."""
@@ -787,7 +868,7 @@ def test_watch_loop_backoff_grows_across_repeated_failures(monkeypatch):
     assert sleep_calls == [1, 2]
 
 
-def test_run_starts_all_nine_watch_loops(monkeypatch):
+def test_run_starts_all_ten_watch_loops(monkeypatch):
     from app.collectors import k8s_watch
     from app.state import ClusterState
 
@@ -807,7 +888,7 @@ def test_run_starts_all_nine_watch_loops(monkeypatch):
     assert calls[0] == "config"
     assert set(calls[1:]) == {
         "nodes", "pods", "deployments", "statefulsets", "daemonsets", "services", "hpas",
-        "persistentvolumes", "events",
+        "networkpolicies", "persistentvolumes", "events",
     }
 
 

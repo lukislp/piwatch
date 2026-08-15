@@ -29,7 +29,7 @@ tr:last-child td{border-bottom:none}
 .uptime-strip{display:flex;gap:2px;height:22px;align-items:stretch;margin-top:8px}
 .uptime-strip i{flex:1;border-radius:2px;min-width:2px}
 .logbox{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;height:480px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-all}
-select,input[type=password],input[type=text]{background:var(--surface);color:var(--ink);border:1px solid var(--axis);border-radius:8px;padding:7px 10px;font-size:14px}
+select,input[type=password],input[type=text]{background:var(--surface);color:var(--ink);border:1px solid var(--axis);border-radius:8px;padding:7px 10px;font-size:14px;max-width:100%;min-width:0}
 button.btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;cursor:pointer;font-weight:600}
 button.ghost{background:none;border:1px solid var(--axis);color:var(--ink2);border-radius:8px;padding:6px 10px;cursor:pointer}
 .login{max-width:340px;margin:18vh auto;display:flex;flex-direction:column;gap:12px}

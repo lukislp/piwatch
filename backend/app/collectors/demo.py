@@ -141,6 +141,11 @@ async def run(state: ClusterState):
                     "last_applied_revision": "main@sha1:demo1234",
                     "last_transition_time": now_iso,
                     "next_reconcile_t": next_reconcile(0),
+                    "managed_resource_count": 6,
+                    "apply_pending": False,
+                    "source_kind": "GitRepository",
+                    "source_name": "piwatch",
+                    "source_namespace": "flux-system",
                 },
                 "flux-system/infra": {
                     "key": "flux-system/infra",
@@ -151,6 +156,69 @@ async def run(state: ClusterState):
                     "message": "Applied revision: main@sha1:demo5678",
                     "last_applied_revision": "main@sha1:demo5678",
                     "next_reconcile_t": next_reconcile(90),
+                    "managed_resource_count": 14,
+                    "apply_pending": False,
+                    "source_kind": "GitRepository",
+                    "source_name": "infra",
+                    "source_namespace": "flux-system",
+                },
+            }
+        )
+        state.set_flux_git_repositories(
+            {
+                "flux-system/piwatch": {
+                    "key": "flux-system/piwatch",
+                    "name": "piwatch",
+                    "namespace": "flux-system",
+                    "ready": True,
+                    "reason": "Succeeded",
+                    "message": "stored artifact for revision 'main@sha1:demo1234'",
+                    "url": "https://github.com/lukislp/piwatch.git",
+                    "ref": "master",
+                    "revision": "main@sha1:demo1234",
+                    "last_update_time": now_iso,
+                },
+                "flux-system/infra": {
+                    "key": "flux-system/infra",
+                    "name": "infra",
+                    "namespace": "flux-system",
+                    "ready": True,
+                    "reason": "Succeeded",
+                    "message": "stored artifact for revision 'main@sha1:demo5678'",
+                    "url": "https://github.com/example/infra.git",
+                    "ref": "main",
+                    "revision": "main@sha1:demo5678",
+                    "last_update_time": now_iso,
+                },
+            }
+        )
+        state.set_flux_image_policies(
+            {
+                "flux-system/piwatch": {
+                    "key": "flux-system/piwatch",
+                    "name": "piwatch",
+                    "namespace": "flux-system",
+                    "ready": True,
+                    "image": "ghcr.io/lukislp/piwatch",
+                    "latest_tag": "1.8.0",
+                    "previous_tag": "1.7.1",
+                    "tag_count": 18,
+                    "last_scan_time": now_iso,
+                },
+            }
+        )
+        state.set_flux_image_automations(
+            {
+                "flux-system/piwatch": {
+                    "key": "flux-system/piwatch",
+                    "name": "piwatch",
+                    "namespace": "flux-system",
+                    "ready": True,
+                    "reason": "Succeeded",
+                    "message": "repository up-to-date",
+                    "last_automation_run_time": now_iso,
+                    "last_push_commit": "demo7890abcd",
+                    "last_push_time": now_iso,
                 },
             }
         )

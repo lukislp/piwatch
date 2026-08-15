@@ -37,8 +37,12 @@ cluster involved.
 - **Metrics**: CPU/RAM usage via metrics-server (bundled with k3s), ~3h history
 - **Network throughput** per node (RX/TX), summed across physical interfaces only
 - **GitOps sync status** (optional): if you run [Flux](https://fluxcd.io/), a "GitOps" card on the
-  Overview page shows each Kustomization's Ready condition and last applied revision. Not a hard
-  dependency -- stays hidden if Flux isn't installed
+  Overview page shows each Kustomization's Ready condition, last applied revision, managed
+  resource count, an apply-in-progress/stuck indicator, a countdown to the next reconcile, and
+  its Git source's sync status. If Flux's image-automation controllers are installed, a second
+  card shows each image policy's latest/previous tag and scan time plus each automation's last
+  run and last Git push. Not a hard dependency -- stays hidden if Flux (or image automation)
+  isn't installed
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Live logs** for any pod, right in the browser
 - **Simple auth**: password from a Kubernetes Secret, signed tokens (failover-friendly)

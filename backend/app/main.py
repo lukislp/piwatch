@@ -5,7 +5,9 @@ files. On startup, the lifespan launches the collectors:
 
 - real mode: Kubernetes watchers, metrics-server poller, hardware poller,
   Flux Kustomization poller (optional -- degrades quietly if Flux isn't installed),
-  PVC poller (usage % additionally needs PIWATCH_PROMETHEUS_URL)
+  PVC poller (usage % additionally needs PIWATCH_PROMETHEUS_URL), Gateway API poller,
+  auto-healthchecks from discovered HTTPRoutes/Services (opt-in via
+  PIWATCH_AUTO_HEALTHCHECKS)
 - demo mode (PIWATCH_DEMO=1 or no cluster reachable): simulator
 
 Run locally:  PIWATCH_DEMO=1 uvicorn app.main:app --reload
@@ -24,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth, ws
 from .collectors import (
+    autochecks,
     demo,
     flux,
     gateway,
@@ -73,6 +76,7 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(flux.run(state)))
         tasks.append(asyncio.create_task(pvc.run(state)))
         tasks.append(asyncio.create_task(gateway.run(state)))
+        tasks.append(asyncio.create_task(autochecks.run(state)))
     tasks.append(asyncio.create_task(healthcheck.run(state)))
     try:
         yield

@@ -22,6 +22,9 @@ cluster involved.
 ## Features
 
 - **Kubernetes live**: nodes, pods, deployments, events via the watch API (no polling)
+- **Rollout drift detection**: flags a Deployment when its replicas haven't all updated yet, or
+  are running different image tags (best-effort pod-to-Deployment match by naming convention --
+  PiWatch doesn't watch ReplicaSets/ownerReferences)
 - **Per-pod CPU/RAM usage**: live usage per pod/workload via metrics-server, right in the Workloads table
 - **Pi hardware**: CPU temperature, load, RAM, disk, uptime per node (DaemonSet agent)
 - **NVMe + power health**: dedicated NVMe tab per node -- temperature, model, firmware,

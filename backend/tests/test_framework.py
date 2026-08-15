@@ -70,7 +70,7 @@ def _pod_obj(name="p1", namespace="default", waiting=False, no_statuses=False):
         name=name, namespace=namespace, creation_timestamp=datetime.now(timezone.utc)
     )
     spec = types.SimpleNamespace(
-        node_name="pi-1", containers=[types.SimpleNamespace(name="app")]
+        node_name="pi-1", containers=[types.SimpleNamespace(name="app", image="registry.local/app:v1")]
     )
     status = types.SimpleNamespace(
         container_statuses=statuses, phase="Running", reason=None
@@ -135,6 +135,7 @@ def test_map_pod_waiting_reason_and_ready_ratio():
     assert d["ready"] == "0/1"
     assert d["restarts"] == 2
     assert d["containers"] == ["app"]
+    assert d["images"] == ["registry.local/app:v1"]
 
 
 def test_map_pod_no_container_statuses():

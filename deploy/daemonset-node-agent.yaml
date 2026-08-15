@@ -22,7 +22,7 @@ spec:
           operator: Exists
       containers:
         - name: agent
-          image: ghcr.io/lukislp/piwatch:1.5.1 # {"$imagepolicy": "flux-system:piwatch"}
+          image: ghcr.io/lukislp/piwatch:1.6.0 # {"$imagepolicy": "flux-system:piwatch"}
           command: ["uvicorn", "app.node_agent:app", "--host", "0.0.0.0", "--port", "9101"]
           # privileged: true is required ONLY for the NVMe SMART reader (node_agent.py's
           # read_nvme_smart(), via nvme-cli): the NVMe admin passthrough ioctl it issues is

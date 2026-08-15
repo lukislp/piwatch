@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/lukislp/piwatch/compare/v1.1.3...v1.2.0) (2026-08-15)
+
+
+### Features
+
+* show per-pod/workload CPU and RAM usage ([7fa0258](https://github.com/lukislp/piwatch/commit/7fa02581013842226ee3de8080f6c49484184572))
+
 ## [1.1.3](https://github.com/lukislp/piwatch/compare/v1.1.2...v1.1.3) (2026-08-07)
 
 

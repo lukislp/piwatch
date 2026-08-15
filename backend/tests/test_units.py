@@ -1163,6 +1163,32 @@ def test_remove_node_pod_deployment_update_state_and_publish():
     asyncio.run(scenario())
 
 
+def test_upsert_and_remove_statefulset_and_daemonset_update_state_and_publish():
+    async def scenario():
+        st = ClusterState()
+        q = st.subscribe()
+
+        st.upsert_statefulset("ns/set-1", {"key": "ns/set-1"})
+        st.upsert_daemonset("ns/ds-1", {"key": "ns/ds-1"})
+        assert "ns/set-1" in st.statefulsets
+        assert "ns/ds-1" in st.daemonsets
+        assert "statefulsets" in st.snapshot()
+        assert "daemonsets" in st.snapshot()
+
+        st.remove_statefulset("ns/set-1")
+        st.remove_daemonset("ns/ds-1")
+        st.remove_statefulset("does-not-exist")  # pop(..., None): must not raise
+        assert "ns/set-1" not in st.statefulsets
+        assert "ns/ds-1" not in st.daemonsets
+
+        msgs = [q.get_nowait() for _ in range(4)]
+        assert [m["type"] for m in msgs] == [
+            "statefulset", "daemonset", "statefulset_deleted", "daemonset_deleted",
+        ]
+
+    asyncio.run(scenario())
+
+
 # ============================ collectors.demo ================================
 
 def test_fake_logs_yields_formatted_lines_and_handles_both_msg_shapes(monkeypatch):

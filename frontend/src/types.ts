@@ -39,6 +39,26 @@ export interface DeploymentInfo {
   images: string[];
 }
 
+export interface StatefulSetInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  replicas: number;
+  ready: number;
+  updated: number;
+  images: string[];
+}
+
+export interface DaemonSetInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  desired: number;
+  ready: number;
+  updated: number;
+  images: string[];
+}
+
 export interface EventInfo {
   uid: string;
   type: string;
@@ -202,6 +222,8 @@ export interface Snapshot {
   nodes: Record<string, NodeInfo>;
   pods: Record<string, PodInfo>;
   deployments: Record<string, DeploymentInfo>;
+  statefulsets: Record<string, StatefulSetInfo>;
+  daemonsets: Record<string, DaemonSetInfo>;
   events: EventInfo[];
   node_metrics: Record<string, NodeMetrics>;
   hardware: Record<string, NodeMetrics>;

@@ -122,6 +122,40 @@ async def run(state: ClusterState):
             },
         )
 
+    # --- seed StatefulSets & DaemonSets (showcases the Workloads tab's coverage of
+    # workload kinds beyond plain Deployments) ---
+    # redis-cluster deliberately mid-rollout (2/3 updated) -- same "in progress" signal
+    # as the piwatch Deployment above, just via StatefulSet's own native updated/replicas
+    # fields instead of a pod-naming match.
+    state.upsert_statefulset(
+        "home/redis-cluster",
+        {
+            "key": "home/redis-cluster",
+            "name": "redis-cluster",
+            "namespace": "home",
+            "replicas": 3,
+            "ready": 3,
+            "updated": 2,
+            "images": ["redis:7.2"],
+        },
+    )
+    for ns, name, desired, images in [
+        ("kube-system", "node-exporter", 3, ["prom/node-exporter:v1.7.0"]),
+        ("monitoring", "piwatch-node-agent", 3, ["ghcr.io/lukislp/piwatch:1.5.1"]),
+    ]:
+        state.upsert_daemonset(
+            f"{ns}/{name}",
+            {
+                "key": f"{ns}/{name}",
+                "name": name,
+                "namespace": ns,
+                "desired": desired,
+                "ready": desired,
+                "updated": desired,
+                "images": images,
+            },
+        )
+
     # --- seed Flux Kustomization sync status (showcases the GitOps section even
     # though there's no real Flux/cluster behind demo mode) ---
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

@@ -30,6 +30,8 @@ class ClusterState:
         self.nodes: dict[str, dict[str, Any]] = {}
         self.pods: dict[str, dict[str, Any]] = {}         # key: ns/name
         self.deployments: dict[str, dict[str, Any]] = {}  # key: ns/name
+        self.statefulsets: dict[str, dict[str, Any]] = {}  # key: ns/name
+        self.daemonsets: dict[str, dict[str, Any]] = {}    # key: ns/name
         self.events: deque[dict[str, Any]] = deque(maxlen=EVENTS_LEN)
 
         # Hardware + metrics per node (latest sample)
@@ -113,6 +115,22 @@ class ClusterState:
     def remove_deployment(self, key: str) -> None:
         self.deployments.pop(key, None)
         self.publish("deployment_deleted", {"key": key})
+
+    def upsert_statefulset(self, key: str, obj: dict) -> None:
+        self.statefulsets[key] = obj
+        self.publish("statefulset", obj)
+
+    def remove_statefulset(self, key: str) -> None:
+        self.statefulsets.pop(key, None)
+        self.publish("statefulset_deleted", {"key": key})
+
+    def upsert_daemonset(self, key: str, obj: dict) -> None:
+        self.daemonsets[key] = obj
+        self.publish("daemonset", obj)
+
+    def remove_daemonset(self, key: str) -> None:
+        self.daemonsets.pop(key, None)
+        self.publish("daemonset_deleted", {"key": key})
 
     def add_event(self, obj: dict) -> None:
         self.events.append(obj)
@@ -198,6 +216,8 @@ class ClusterState:
             "nodes": self.nodes,
             "pods": self.pods,
             "deployments": self.deployments,
+            "statefulsets": self.statefulsets,
+            "daemonsets": self.daemonsets,
             "events": list(self.events),
             "node_metrics": self.node_metrics,
             "hardware": self.hardware,

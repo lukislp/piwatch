@@ -101,6 +101,30 @@ def map_deployment(d) -> dict:
     }
 
 
+def map_statefulset(s) -> dict:
+    return {
+        "key": f"{s.metadata.namespace}/{s.metadata.name}",
+        "name": s.metadata.name,
+        "namespace": s.metadata.namespace,
+        "replicas": s.spec.replicas or 0,
+        "ready": s.status.ready_replicas or 0,
+        "updated": s.status.updated_replicas or 0,
+        "images": [c.image for c in s.spec.template.spec.containers],
+    }
+
+
+def map_daemonset(d) -> dict:
+    return {
+        "key": f"{d.metadata.namespace}/{d.metadata.name}",
+        "name": d.metadata.name,
+        "namespace": d.metadata.namespace,
+        "desired": d.status.desired_number_scheduled or 0,
+        "ready": d.status.number_ready or 0,
+        "updated": d.status.updated_number_scheduled or 0,
+        "images": [c.image for c in d.spec.template.spec.containers],
+    }
+
+
 def map_event(e) -> dict:
     ts = e.last_timestamp or e.event_time or e.metadata.creation_timestamp
     return {
@@ -134,6 +158,10 @@ async def _watch_loop(state: ClusterState, kind: str):
                     lister, mapper = v1.list_pod_for_all_namespaces, map_pod
                 elif kind == "deployments":
                     lister, mapper = apps.list_deployment_for_all_namespaces, map_deployment
+                elif kind == "statefulsets":
+                    lister, mapper = apps.list_stateful_set_for_all_namespaces, map_statefulset
+                elif kind == "daemonsets":
+                    lister, mapper = apps.list_daemon_set_for_all_namespaces, map_daemonset
                 elif kind == "events":
                     lister, mapper = v1.list_event_for_all_namespaces, map_event
                 else:
@@ -167,6 +195,10 @@ def _apply(state: ClusterState, kind: str, ev_type: str, obj: dict) -> None:
         state.remove_pod(obj["key"]) if deleted else state.upsert_pod(obj["key"], obj)
     elif kind == "deployments":
         state.remove_deployment(obj["key"]) if deleted else state.upsert_deployment(obj["key"], obj)
+    elif kind == "statefulsets":
+        state.remove_statefulset(obj["key"]) if deleted else state.upsert_statefulset(obj["key"], obj)
+    elif kind == "daemonsets":
+        state.remove_daemonset(obj["key"]) if deleted else state.upsert_daemonset(obj["key"], obj)
     elif kind == "events" and not deleted:
         state.add_event(obj)
 
@@ -178,5 +210,7 @@ async def run(state: ClusterState):
         _watch_loop(state, "nodes"),
         _watch_loop(state, "pods"),
         _watch_loop(state, "deployments"),
+        _watch_loop(state, "statefulsets"),
+        _watch_loop(state, "daemonsets"),
         _watch_loop(state, "events"),
     )

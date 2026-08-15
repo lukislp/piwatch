@@ -1,3 +1,10 @@
+## [1.11.2](https://github.com/lukislp/piwatch/compare/v1.11.1...v1.11.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* discard PVC usage % when Prometheus reports the node disk, not the volume ([e0e8e35](https://github.com/lukislp/piwatch/commit/e0e8e35b56bc7db8e9b160e67768293db0f4b2e4))
+
 ## [1.11.1](https://github.com/lukislp/piwatch/compare/v1.11.0...v1.11.1) (2026-08-15)
 
 

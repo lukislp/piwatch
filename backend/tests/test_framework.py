@@ -1465,6 +1465,235 @@ def test_pvc_run_backs_off_on_k8s_listing_failure(monkeypatch):
 
 
 # ==================================================================
+# app.collectors.gateway
+# ==================================================================
+
+
+def _gateway_obj(
+    name="gw1", namespace="default", programmed=True,
+    listener_names=("web", "web-tls"), attached_routes=(1, 1),
+):
+    listeners_spec = [{"name": n, "port": 443, "protocol": "HTTPS"} for n in listener_names]
+    listeners_status = [
+        {
+            "name": n,
+            "attachedRoutes": ar,
+            "conditions": [
+                {
+                    "type": "Programmed",
+                    "status": "True" if programmed else "False",
+                    "reason": "Programmed" if programmed else "Invalid",
+                }
+            ],
+        }
+        for n, ar in zip(listener_names, attached_routes)
+    ]
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {"gatewayClassName": "nginx", "listeners": listeners_spec},
+        "status": {
+            "conditions": [
+                {
+                    "type": "Programmed",
+                    "status": "True" if programmed else "False",
+                    "reason": "Programmed" if programmed else "Invalid",
+                    "message": "The Gateway is programmed" if programmed else "bad config",
+                }
+            ],
+            "addresses": [{"type": "IPAddress", "value": "192.168.1.50"}],
+            "listeners": listeners_status,
+        },
+    }
+
+
+def _http_route_obj(
+    name="route1", namespace="default", accepted=True, resolved_refs=True,
+    parent_name="gw1", hostnames=("app.example.com",), backend_name="app-svc", with_parent_status=True,
+):
+    parents = []
+    if with_parent_status:
+        parents.append(
+            {
+                "parentRef": {"name": parent_name},
+                "conditions": [
+                    {
+                        "type": "Accepted",
+                        "status": "True" if accepted else "False",
+                        "reason": "Accepted" if accepted else "NotAllowedByListeners",
+                        "message": "The Route is accepted" if accepted else "denied by listener",
+                    },
+                    {
+                        "type": "ResolvedRefs",
+                        "status": "True" if resolved_refs else "False",
+                        "reason": "ResolvedRefs" if resolved_refs else "BackendNotFound",
+                        "message": "All references are resolved" if resolved_refs else "service not found",
+                    },
+                ],
+            }
+        )
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {
+            "hostnames": list(hostnames),
+            "parentRefs": [{"name": parent_name, "kind": "Gateway"}],
+            "rules": [{"backendRefs": [{"name": backend_name, "kind": "Service"}]}],
+        },
+        "status": {"parents": parents},
+    }
+
+
+def test_map_gateway_extracts_status_addresses_and_listener_counts():
+    from app.collectors.gateway import _map_gateway
+
+    d = _map_gateway(_gateway_obj())
+    assert d["key"] == "default/gw1"
+    assert d["ready"] is True
+    assert d["gateway_class_name"] == "nginx"
+    assert d["addresses"] == ["192.168.1.50"]
+    assert d["listener_count"] == 2
+    assert d["listeners_ready"] == 2
+    assert d["attached_routes"] == 2
+
+
+def test_map_gateway_not_programmed_surfaces_reason_and_partial_listeners():
+    from app.collectors.gateway import _map_gateway
+
+    d = _map_gateway(_gateway_obj(programmed=False))
+    assert d["ready"] is False
+    assert d["reason"] == "Invalid"
+    # listener-level Programmed conditions also flip with the parent object in this fixture
+    assert d["listeners_ready"] == 0
+
+
+def test_map_http_route_accepted_and_resolved():
+    from app.collectors.gateway import _map_http_route
+
+    d = _map_http_route(_http_route_obj())
+    assert d["key"] == "default/route1"
+    assert d["hostnames"] == ["app.example.com"]
+    assert d["parent_names"] == ["gw1"]
+    assert d["backend_names"] == ["app-svc"]
+    assert d["accepted"] is True
+    assert d["resolved_refs"] is True
+    assert d["reason"] is None
+
+
+def test_map_http_route_not_accepted_surfaces_reason():
+    from app.collectors.gateway import _map_http_route
+
+    d = _map_http_route(_http_route_obj(accepted=False))
+    assert d["accepted"] is False
+    assert d["reason"] == "NotAllowedByListeners"
+
+
+def test_map_http_route_backend_not_resolved():
+    """The failure mode a Deployment/Pod-only view can't catch: the route's
+    backendRef points at a Service that doesn't exist or doesn't match."""
+    from app.collectors.gateway import _map_http_route
+
+    d = _map_http_route(_http_route_obj(resolved_refs=False))
+    assert d["resolved_refs"] is False
+    assert d["reason"] == "BackendNotFound"
+
+
+def test_map_http_route_no_parent_status_defaults_to_not_accepted():
+    """Freshly created, or no matching Gateway found at all -- can't claim
+    accepted just because nothing said otherwise."""
+    from app.collectors.gateway import _map_http_route
+
+    d = _map_http_route(_http_route_obj(with_parent_status=False))
+    assert d["accepted"] is False
+
+
+def test_gateway_run_polls_and_publishes_both_kinds(monkeypatch):
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import gateway
+    from app.state import ClusterState
+
+    st = ClusterState()
+    fake_api = _FakeCustomObjectsApi(
+        {"gateways": [_gateway_obj()], "httproutes": [_http_route_obj()]}
+    )
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(gateway.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(gateway.run(st))
+
+    assert st.gateways["default/gw1"]["ready"] is True
+    assert st.http_routes["default/route1"]["accepted"] is True
+    assert sleep_calls == [gateway.POLL_INTERVAL]
+
+
+def test_gateway_run_both_kinds_degrade_independently_and_keep_polling(monkeypatch):
+    """Gateway API is optional -- a missing CRD (or missing RBAC) must not
+    crash the app, just back off at the normal POLL_INTERVAL cadence."""
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import gateway
+    from app.state import ClusterState
+
+    st = ClusterState()
+    fake_api = _FakeCustomObjectsApi(error=RuntimeError("404 Not Found"))
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(gateway.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(gateway.run(st))
+
+    assert st.gateways == {}
+    assert st.http_routes == {}
+    assert sleep_calls == [gateway.POLL_INTERVAL]
+
+
+def test_gateway_run_backs_off_on_structural_failure(monkeypatch):
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import gateway
+    from app.state import ClusterState
+
+    class _BrokenApiClient:
+        async def __aenter__(self):
+            raise RuntimeError("connection refused")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    st = ClusterState()
+    monkeypatch.setattr(kclient, "ApiClient", _BrokenApiClient)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(gateway.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(gateway.run(st))
+
+    assert sleep_calls == [gateway.RETRY_INTERVAL]
+
+
+# ==================================================================
 # app.ws
 # ==================================================================
 
@@ -1789,6 +2018,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
     monkeypatch.setattr(main_mod.hardware, "run", fake_collector)
     monkeypatch.setattr(main_mod.flux, "run", fake_collector)
     monkeypatch.setattr(main_mod.pvc, "run", fake_collector)
+    monkeypatch.setattr(main_mod.gateway, "run", fake_collector)
 
     from fastapi.testclient import TestClient
 
@@ -1798,7 +2028,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
         r = client.get("/readyz")
         assert r.status_code == 503
         assert r.json() == {"ready": False}
-    assert len(started) == 5  # k8s_watch, metrics, hardware, flux, pvc all launched
+    assert len(started) == 6  # k8s_watch, metrics, hardware, flux, pvc, gateway all launched
 
 
 def test_get_state_endpoint_returns_snapshot(monkeypatch, tmp_path):

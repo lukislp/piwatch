@@ -119,6 +119,10 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
       return { ...snap, flux_image_automations: d };
     case "pvcs":
       return { ...snap, pvcs: d };
+    case "gateways":
+      return { ...snap, gateways: d };
+    case "http_routes":
+      return { ...snap, http_routes: d };
     case "healthcheck": {
       const name = d.name as string;
       const entry = snap.healthchecks[name] ?? { config: { name }, history: [] };

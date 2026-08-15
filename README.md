@@ -48,6 +48,12 @@ cluster involved.
   run and last Git push -- and the tag actually running right now (best-effort match against
   Deployment images by repository), highlighted when it's behind the latest scanned tag. Not a
   hard dependency -- stays hidden if Flux (or image automation) isn't installed
+- **Gateway API routing status** (optional): if you route traffic through the
+  [Gateway API](https://gateway-api.sigs.k8s.io/), a "Gateway API" card on the Overview page
+  shows each Gateway's Programmed status, assigned address and listener count, plus each
+  HTTPRoute's accepted/backend-resolved status -- catches a route pointing at a Service that
+  doesn't exist or doesn't match, a failure mode invisible from the Deployment/Pod view alone.
+  Not a hard dependency -- stays hidden if you don't use the Gateway API
 - **PVC storage usage**: a "Storage" card on the Workloads page lists every PersistentVolumeClaim
   with its status, storage class and capacity. Usage % additionally needs
   [Prometheus](https://prometheus.io/) scraping kubelet (set `PIWATCH_PROMETHEUS_URL`) -- without

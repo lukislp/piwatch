@@ -60,16 +60,13 @@ spec:
             # k8s/12-network-policies.yaml allow-ingress-to-prometheus for the pattern).
             - name: PIWATCH_PROMETHEUS_URL
               value: http://prometheus.monitoring.svc.cluster.local:9090
-              # Optional (see collectors/history.py): persists node_history to /data/history.db
-              # so the chart window survives a pod restart instead of starting empty, bounded to
-              # PIWATCH_HISTORY_RETENTION_DAYS (default 7) via periodic pruning. Uncomment both to
-              # enable -- left off here since the `history` volume below is hostPath, tied to
-              # whichever node this replica currently runs on (see collectors/history.py's
-              # docstring for why: a shared PVC would conflict with the anti-affinity spread).
-              # - name: PIWATCH_HISTORY_DB
-              #   value: /data/history.db
-              # - name: PIWATCH_HISTORY_RETENTION_DAYS
-              #   value: "7"
+            # Persists node_history to /data/history.db (hostPath, see the `history`
+            # volume below) so the chart window survives a pod restart instead of starting
+            # empty. Bounded to PIWATCH_HISTORY_RETENTION_DAYS via periodic pruning, not unlimited.
+            - name: PIWATCH_HISTORY_DB
+              value: /data/history.db
+            - name: PIWATCH_HISTORY_RETENTION_DAYS
+              value: "7"
           volumeMounts:
             - {name: checks, mountPath: /config, readOnly: true}
             - {name: history, mountPath: /data}
@@ -89,8 +86,7 @@ spec:
           configMap:
             name: piwatch-healthchecks
             optional: true
-        # Node-local, not a PVC -- see the PIWATCH_HISTORY_DB comment above. Unused disk
-        # space until that env var is set (an empty directory costs nothing).
+        # Node-local, not a PVC -- see the PIWATCH_HISTORY_DB comment above.
         - name: history
           hostPath:
             path: /var/lib/piwatch-history

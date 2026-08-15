@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/lukislp/piwatch/compare/v1.19.0...v1.20.0) (2026-08-15)
+
+
+### Features
+
+* persist node history to survive pod restarts, bounded retention ([10d583f](https://github.com/lukislp/piwatch/commit/10d583f8f9136fdc935c59f35e8732558ec5bd8c))
+
 # [1.19.0](https://github.com/lukislp/piwatch/compare/v1.18.3...v1.19.0) (2026-08-15)
 
 

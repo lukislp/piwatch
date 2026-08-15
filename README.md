@@ -60,6 +60,9 @@ cluster involved.
   HTTPRoute's accepted/backend-resolved status -- catches a route pointing at a Service that
   doesn't exist or doesn't match, a failure mode invisible from the Deployment/Pod view alone.
   Not a hard dependency -- stays hidden if you don't use the Gateway API
+- **LoadBalancer Service status**: a card on the Overview page lists every `type: LoadBalancer`
+  Service with its cluster/external IP and ports, flagging any still stuck waiting for an
+  address (e.g. no free IP left in your MetalLB pool). Stays hidden if you don't run any
 - **PVC storage usage**: a "Storage" card on the Workloads page lists every PersistentVolumeClaim
   with its status, storage class and capacity. Usage % additionally needs
   [Prometheus](https://prometheus.io/) scraping kubelet (set `PIWATCH_PROMETHEUS_URL`) -- without

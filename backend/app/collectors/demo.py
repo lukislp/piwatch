@@ -169,6 +169,33 @@ async def run(state: ClusterState):
             },
         )
 
+    # --- seed LoadBalancer Services (showcases the Overview page's LoadBalancer status,
+    # one healthy with an assigned address, one still Pending) ---
+    state.upsert_service(
+        "nginx-gateway/nginx-gateway",
+        {
+            "key": "nginx-gateway/nginx-gateway",
+            "name": "nginx-gateway",
+            "namespace": "nginx-gateway",
+            "type": "LoadBalancer",
+            "cluster_ip": "10.43.9.1",
+            "external_ips": ["192.168.1.50"],
+            "ports": [{"port": 443, "protocol": "TCP", "name": "https"}],
+        },
+    )
+    state.upsert_service(
+        "home/mosquitto-mqtt",
+        {
+            "key": "home/mosquitto-mqtt",
+            "name": "mosquitto-mqtt",
+            "namespace": "home",
+            "type": "LoadBalancer",
+            "cluster_ip": "10.43.9.2",
+            "external_ips": [],
+            "ports": [{"port": 1883, "protocol": "TCP", "name": "mqtt"}],
+        },
+    )
+
     # --- seed Gateway API routing status (showcases the Gateway section even though
     # there's no real Gateway API/cluster behind demo mode) ---
     state.set_gateways(

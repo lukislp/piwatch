@@ -121,6 +121,18 @@ def _daemonset_obj(name="ds1", namespace="default"):
     return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
 
 
+def _service_obj(name="svc1", namespace="default", svc_type="LoadBalancer", ingress=None):
+    metadata = types.SimpleNamespace(name=name, namespace=namespace)
+    spec = types.SimpleNamespace(
+        type=svc_type,
+        cluster_ip="10.43.1.1",
+        ports=[types.SimpleNamespace(port=443, protocol="TCP", name="https")],
+    )
+    lb = types.SimpleNamespace(ingress=ingress) if ingress is not None else types.SimpleNamespace(ingress=None)
+    status = types.SimpleNamespace(load_balancer=lb)
+    return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
+
+
 def _event_obj(uid="evt-1"):
     metadata = types.SimpleNamespace(uid=uid, creation_timestamp=None)
     involved = types.SimpleNamespace(kind="Pod", name="p1", namespace="default")
@@ -268,6 +280,34 @@ def test_map_daemonset():
     assert d["images"] == ["registry.local/agent:latest"]
 
 
+def test_map_service_extracts_external_ip_from_ingress():
+    from app.collectors.k8s_watch import map_service
+
+    ingress = [types.SimpleNamespace(ip="192.168.1.50", hostname=None)]
+    d = map_service(_service_obj(ingress=ingress))
+    assert d["key"] == "default/svc1"
+    assert d["type"] == "LoadBalancer"
+    assert d["cluster_ip"] == "10.43.1.1"
+    assert d["external_ips"] == ["192.168.1.50"]
+    assert d["ports"] == [{"port": 443, "protocol": "TCP", "name": "https"}]
+
+
+def test_map_service_falls_back_to_hostname_when_no_ip():
+    from app.collectors.k8s_watch import map_service
+
+    ingress = [types.SimpleNamespace(ip=None, hostname="lb.example.com")]
+    d = map_service(_service_obj(ingress=ingress))
+    assert d["external_ips"] == ["lb.example.com"]
+
+
+def test_map_service_no_ingress_yet_is_empty_external_ips():
+    """Pending: LoadBalancer type but the controller hasn't assigned an address yet."""
+    from app.collectors.k8s_watch import map_service
+
+    d = map_service(_service_obj(ingress=None))
+    assert d["external_ips"] == []
+
+
 def test_map_event_uses_last_timestamp():
     from app.collectors.k8s_watch import map_event
 
@@ -308,6 +348,15 @@ def test_apply_all_kinds_upsert_and_delete():
     assert "ns/ds1" in st.daemonsets
     _apply(st, "daemonsets", "DELETED", {"key": "ns/ds1"})
     assert "ns/ds1" not in st.daemonsets
+
+    _apply(st, "services", "ADDED", {"key": "ns/svc1", "type": "LoadBalancer"})
+    assert "ns/svc1" in st.services
+    # a Service edited to no longer be LoadBalancer must be actively removed
+    _apply(st, "services", "MODIFIED", {"key": "ns/svc1", "type": "ClusterIP"})
+    assert "ns/svc1" not in st.services
+    _apply(st, "services", "ADDED", {"key": "ns/svc1", "type": "LoadBalancer"})
+    _apply(st, "services", "DELETED", {"key": "ns/svc1", "type": "LoadBalancer"})
+    assert "ns/svc1" not in st.services
 
     _apply(st, "events", "ADDED", {"uid": "e1"})
     assert len(st.events) == 1
@@ -399,7 +448,8 @@ class _FakeWatch:
 
 
 def _patch_k8s_client(
-    monkeypatch, nodes=None, pods=None, deployments=None, statefulsets=None, daemonsets=None, events=None
+    monkeypatch, nodes=None, pods=None, deployments=None, statefulsets=None, daemonsets=None,
+    services=None, events=None,
 ):
     """Patch kubernetes_asyncio.client's Api classes used by _watch_loop."""
     from kubernetes_asyncio import client as kclient
@@ -413,6 +463,9 @@ def _patch_k8s_client(
 
         async def list_pod_for_all_namespaces(self):
             return _FakeList(pods or [])
+
+        async def list_service_for_all_namespaces(self):
+            return _FakeList(services or [])
 
         async def list_event_for_all_namespaces(self):
             return _FakeList(events or [])
@@ -443,6 +496,7 @@ def _patch_k8s_client(
         ("deployments", "deployments", _deployment_obj(), _deployment_obj(name="d2")),
         ("statefulsets", "statefulsets", _statefulset_obj(), _statefulset_obj(name="s2")),
         ("daemonsets", "daemonsets", _daemonset_obj(), _daemonset_obj(name="ds2")),
+        ("services", "services", _service_obj(), _service_obj(name="svc2")),
         ("events", "events", _event_obj(), _event_obj(uid="e2")),
     ],
 )
@@ -570,7 +624,7 @@ def test_watch_loop_backoff_grows_across_repeated_failures(monkeypatch):
     assert sleep_calls == [1, 2]
 
 
-def test_run_starts_all_six_watch_loops(monkeypatch):
+def test_run_starts_all_seven_watch_loops(monkeypatch):
     from app.collectors import k8s_watch
     from app.state import ClusterState
 
@@ -588,7 +642,9 @@ def test_run_starts_all_six_watch_loops(monkeypatch):
     st = ClusterState()
     asyncio.run(k8s_watch.run(st))
     assert calls[0] == "config"
-    assert set(calls[1:]) == {"nodes", "pods", "deployments", "statefulsets", "daemonsets", "events"}
+    assert set(calls[1:]) == {
+        "nodes", "pods", "deployments", "statefulsets", "daemonsets", "services", "events",
+    }
 
 
 # ==================================================================

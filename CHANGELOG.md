@@ -1,3 +1,10 @@
+## [1.17.1](https://github.com/lukislp/piwatch/compare/v1.17.0...v1.17.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* lone last-row Overview tile stretching, table overflow on mobile ([4b2b44b](https://github.com/lukislp/piwatch/commit/4b2b44baa6f73ea1dfee6d55a73d89269063e8f7))
+
 # [1.17.0](https://github.com/lukislp/piwatch/compare/v1.16.0...v1.17.0) (2026-08-15)
 
 

@@ -29,7 +29,7 @@ spec:
                   matchLabels: {app: piwatch}
       containers:
         - name: piwatch
-          image: ghcr.io/lukislp/piwatch:1.7.0 # {"$imagepolicy": "flux-system:piwatch"}
+          image: ghcr.io/lukislp/piwatch:1.7.1 # {"$imagepolicy": "flux-system:piwatch"}
           # No runAsNonRoot: the image has no USER directive (runs as root) - enforcing it
           # retroactively would crash without an accompanying Dockerfile change (+rebuild).
           # allowPrivilegeEscalation/capabilities are safe independently of that, because the

@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/lukislp/piwatch/compare/v1.9.0...v1.10.0) (2026-08-15)
+
+
+### Features
+
+* show PVC storage usage on the Workloads page ([5565315](https://github.com/lukislp/piwatch/commit/55653152c7a6bb3c2c36a7366cea7538297c447b))
+
 # [1.9.0](https://github.com/lukislp/piwatch/compare/v1.8.0...v1.9.0) (2026-08-15)
 
 

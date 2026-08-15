@@ -508,7 +508,14 @@ function Storage({ snap }: { snap: Snapshot }) {
               <td className="muted">{p.phase ?? "–"}</td>
               <td className="muted">{p.storage_class ?? "–"}</td>
               <td className="num muted">{fmtBytes(p.capacity_bytes ?? p.requested_bytes ?? undefined)}</td>
-              <td className="num" title={p.usage_pct == null ? "Set PIWATCH_PROMETHEUS_URL to see usage" : undefined}>
+              <td
+                className="num"
+                title={
+                  p.usage_pct == null
+                    ? "Not available -- needs PIWATCH_PROMETHEUS_URL, and a storage class that reports real per-volume usage (some, like local-path-provisioner, don't)"
+                    : undefined
+                }
+              >
                 {p.usage_pct != null ? (
                   <span style={{ color: pvcUsageColor(p.usage_pct) }}>
                     {p.usage_pct.toFixed(0)}% ({fmtBytes(p.usage_bytes ?? undefined)})

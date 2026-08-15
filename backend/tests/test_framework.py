@@ -1146,6 +1146,75 @@ def test_query_prometheus_skips_entries_missing_labels_or_unparsable_value(monke
     assert result == {"home/ok": pytest.approx(42.0)}
 
 
+def test_merge_prometheus_usage_accepts_capacity_matching_the_pvcs_own_declared_size(monkeypatch):
+    import httpx
+
+    from app.collectors.pvc import _merge_prometheus_usage
+
+    async def fake_get(_self, _url, params=None, **_kw):
+        if "capacity" in params["query"]:
+            return _FakePromResponse(_prom_vector([("home", "data", 10 * 1024**3)]))
+        return _FakePromResponse(_prom_vector([("home", "data", 4 * 1024**3)]))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    items = {"home/data": {"capacity_bytes": 10 * 1024**3}}
+
+    async def scenario():
+        async with httpx.AsyncClient() as client:
+            await _merge_prometheus_usage(client, "http://prom:9090", items)
+
+    asyncio.run(scenario())
+    assert items["home/data"]["usage_bytes"] == 4 * 1024**3
+    assert items["home/data"]["usage_pct"] == pytest.approx(40.0)
+
+
+def test_merge_prometheus_usage_discards_capacity_that_wildly_exceeds_the_pvcs_declared_size(monkeypatch):
+    """local-path-provisioner (and similar no-quota provisioners) make kubelet report the whole
+    node disk as "capacity" for every PVC on it -- must be discarded, not shown as real usage."""
+    import httpx
+
+    from app.collectors.pvc import _merge_prometheus_usage
+
+    async def fake_get(_self, _url, params=None, **_kw):
+        if "capacity" in params["query"]:
+            return _FakePromResponse(_prom_vector([("home", "data", 229 * 1024**3)]))
+        return _FakePromResponse(_prom_vector([("home", "data", 38 * 1024**3)]))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    items = {"home/data": {"capacity_bytes": 256 * 1024**2, "usage_bytes": None, "usage_pct": None}}  # 256Mi PVC
+
+    async def scenario():
+        async with httpx.AsyncClient() as client:
+            await _merge_prometheus_usage(client, "http://prom:9090", items)
+
+    asyncio.run(scenario())
+    assert items["home/data"]["usage_bytes"] is None
+    assert items["home/data"]["usage_pct"] is None
+
+
+def test_merge_prometheus_usage_skips_when_pvc_has_no_declared_capacity_yet(monkeypatch):
+    """A Pending PVC (not yet bound) has no capacity_bytes to sanity-check against."""
+    import httpx
+
+    from app.collectors.pvc import _merge_prometheus_usage
+
+    async def fake_get(_self, _url, params=None, **_kw):
+        if "capacity" in params["query"]:
+            return _FakePromResponse(_prom_vector([("home", "data", 10 * 1024**3)]))
+        return _FakePromResponse(_prom_vector([("home", "data", 4 * 1024**3)]))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    items = {"home/data": {"capacity_bytes": None, "usage_bytes": None, "usage_pct": None}}
+
+    async def scenario():
+        async with httpx.AsyncClient() as client:
+            await _merge_prometheus_usage(client, "http://prom:9090", items)
+
+    asyncio.run(scenario())
+    assert items["home/data"]["usage_bytes"] is None
+    assert items["home/data"]["usage_pct"] is None
+
+
 def _fake_core_v1_api(items):
     class _FakeCoreV1Api:
         def __init__(self, api_client):
@@ -1218,6 +1287,49 @@ def test_pvc_run_merges_prometheus_usage_when_configured(monkeypatch):
     d = st.pvcs["home/home-assistant-config"]
     assert d["usage_bytes"] == 2 * 1024**3
     assert d["usage_pct"] == pytest.approx(40.0)
+    assert sleep_calls == [pvc.POLL_INTERVAL]
+
+
+def test_pvc_run_discards_usage_when_prometheus_capacity_is_really_the_node_disk(monkeypatch):
+    """Storage classes without real per-volume quotas (e.g. local-path-provisioner) make kubelet
+    fall back to statfs() on the underlying node disk -- caught live: a 256Mi PVC "using" 25-38GiB,
+    because kubelet_volume_stats_capacity_bytes reported the whole node's disk size identically for
+    every PVC on it, wildly exceeding what the PVC itself declared. Must be discarded, not shown."""
+    import httpx
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import pvc
+    from app.state import ClusterState
+
+    monkeypatch.setenv("PIWATCH_PROMETHEUS_URL", "http://prom:9090")
+    st = ClusterState()
+    small_pvc = _pvc_obj(name="mosquitto-data", requested="256Mi", capacity="256Mi")
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CoreV1Api", _fake_core_v1_api([small_pvc]))
+
+    node_disk_bytes = 229 * 1024**3  # ~229GiB, the whole node's disk -- not this PVC's 256Mi
+
+    async def fake_get(_self, _url, params=None, **_kw):
+        if "capacity" in params["query"]:
+            return _FakePromResponse(_prom_vector([("home", "mosquitto-data", node_disk_bytes)]))
+        return _FakePromResponse(_prom_vector([("home", "mosquitto-data", 38 * 1024**3)]))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(pvc.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(pvc.run(st))
+
+    d = st.pvcs["home/mosquitto-data"]
+    assert d["usage_bytes"] is None
+    assert d["usage_pct"] is None
     assert sleep_calls == [pvc.POLL_INTERVAL]
 
 

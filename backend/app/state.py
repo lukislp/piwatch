@@ -115,6 +115,8 @@ class ClusterState:
                 "cpu_pct": merged.get("cpu_pct"),
                 "mem_pct": merged.get("mem_pct"),
                 "temp_c": merged.get("temp_c"),
+                "nvme_read_bytes_per_s": merged.get("nvme_read_bytes_per_s"),
+                "nvme_write_bytes_per_s": merged.get("nvme_write_bytes_per_s"),
             }
         )
         self.publish("node_metrics", {"node": node, **merged})
@@ -132,7 +134,14 @@ class ClusterState:
             {
                 k: v
                 for k, v in data.items()
-                if k in ("temp_c", "disk_used_pct", "load1", "uptime_s")
+                if k in (
+                    "temp_c",
+                    "disk_used_pct",
+                    "load1",
+                    "uptime_s",
+                    "nvme_read_bytes_per_s",
+                    "nvme_write_bytes_per_s",
+                )
             },
         )
 

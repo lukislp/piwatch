@@ -1,3 +1,11 @@
+## [1.18.3](https://github.com/lukislp/piwatch/compare/v1.18.2...v1.18.3) (2026-08-15)
+
+
+### Bug Fixes
+
+* balance Overview tile grid across rows instead of a lone remainder ([b3eda1c](https://github.com/lukislp/piwatch/commit/b3eda1c73cc0d20213d47c04fea459d43cc10ddd))
+* re-trigger CI after semantic-release skipped due to a mid-run push race ([ce8dfde](https://github.com/lukislp/piwatch/commit/ce8dfde520c41bd7e020a080dc229fb7154acb7f))
+
 ## [1.18.2](https://github.com/lukislp/piwatch/compare/v1.18.1...v1.18.2) (2026-08-15)
 
 

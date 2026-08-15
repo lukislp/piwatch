@@ -543,7 +543,13 @@ function Autoscalers({ snap }: { snap: Snapshot }) {
         </thead>
         <tbody>
           {hpas.map((h) => {
-            const limited = h.scaling_limited === "True";
+            // ScalingLimited fires whenever the calculated target is capped in EITHER
+            // direction -- including being capped at min_replicas under low load, which
+            // is normal/expected (verified live: a real HPA sitting at 2/2-4 with CPU well
+            // under target, correctly refusing to scale below its floor). Only capped at
+            // the ceiling (unable to scale UP under real demand) is worth flagging.
+            const atCeiling = h.max_replicas != null && h.current_replicas >= h.max_replicas;
+            const limited = h.scaling_limited === "True" && atCeiling;
             const notActive = h.scaling_active === "False" || h.able_to_scale === "False";
             const problem = notActive || limited;
             return (

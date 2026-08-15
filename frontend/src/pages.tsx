@@ -570,6 +570,69 @@ function Storage({ snap }: { snap: Snapshot }) {
   );
 }
 
+// Hidden entirely when empty, same reasoning as Storage/GitOpsStatus: not every cluster
+// runs StatefulSets (they're common for stateful apps like databases/caches, but far from
+// universal in a small homelab-style deployment).
+function StatefulSets({ snap }: { snap: Snapshot }) {
+  const sets = Object.values(snap.statefulsets).sort((a, b) => a.key.localeCompare(b.key));
+  if (sets.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>StatefulSets</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Namespace</th><th className="num">Ready</th><th>Image</th></tr></thead>
+        <tbody>
+          {sets.map((s) => (
+            <tr key={s.key}>
+              <td><Dot color={s.ready >= s.replicas ? STATUS.good : STATUS.warning} />{s.name}</td>
+              <td className="muted">{s.namespace}</td>
+              <td className="num">{s.ready}/{s.replicas}</td>
+              <td className="mono muted">
+                {s.images.join(", ")}
+                {s.updated < s.replicas && (
+                  <span style={{ color: STATUS.warning }} title={`${s.updated}/${s.replicas} replicas updated to the current revision`}>
+                    {" "}⚠ rollout in progress
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DaemonSets({ snap }: { snap: Snapshot }) {
+  const sets = Object.values(snap.daemonsets).sort((a, b) => a.key.localeCompare(b.key));
+  if (sets.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>DaemonSets</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Namespace</th><th className="num">Ready</th><th>Image</th></tr></thead>
+        <tbody>
+          {sets.map((s) => (
+            <tr key={s.key}>
+              <td><Dot color={s.ready >= s.desired ? STATUS.good : STATUS.warning} />{s.name}</td>
+              <td className="muted">{s.namespace}</td>
+              <td className="num">{s.ready}/{s.desired}</td>
+              <td className="mono muted">
+                {s.images.join(", ")}
+                {s.updated < s.desired && (
+                  <span style={{ color: STATUS.warning }} title={`${s.updated}/${s.desired} scheduled to the current revision`}>
+                    {" "}⚠ rollout in progress
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const deps = Object.values(snap.deployments).sort((a, b) => a.key.localeCompare(b.key));
   const pods = Object.values(snap.pods).sort((a, b) => a.key.localeCompare(b.key));
@@ -599,6 +662,8 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
           </tbody>
         </table>
       </div>
+      <StatefulSets snap={snap} />
+      <DaemonSets snap={snap} />
       <div className="card">
         <h2>Pods</h2>
         <table>

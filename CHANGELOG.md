@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/lukislp/piwatch/compare/v1.10.0...v1.11.0) (2026-08-15)
+
+
+### Features
+
+* show cluster-wide CPU/RAM capacity on the Overview page ([e5d9d91](https://github.com/lukislp/piwatch/commit/e5d9d915a4cf721a9d5d58f95fb414c5ac5f04a8))
+
 # [1.10.0](https://github.com/lukislp/piwatch/compare/v1.9.0...v1.10.0) (2026-08-15)
 
 

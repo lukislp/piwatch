@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/lukislp/piwatch/compare/v1.16.0...v1.17.0) (2026-08-15)
+
+
+### Features
+
+* detect orphaned PersistentVolumes on the Workloads page ([319528b](https://github.com/lukislp/piwatch/commit/319528b05182317818a0356cb1712be3800f87da))
+
 # [1.16.0](https://github.com/lukislp/piwatch/compare/v1.15.0...v1.16.0) (2026-08-15)
 
 

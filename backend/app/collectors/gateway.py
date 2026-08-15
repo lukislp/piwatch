@@ -56,6 +56,18 @@ def _map_gateway(item: dict) -> dict:
         "listener_count": len(spec.get("listeners") or []),
         "listeners_ready": listeners_ready,
         "attached_routes": attached_routes,
+        # Per-listener hostname/port/protocol -- not surfaced in the UI (listener_count/
+        # listeners_ready above is enough there), but collectors/autochecks.py needs it to
+        # pick the right port+SNI hostname when probing a route through this Gateway.
+        "listeners": [
+            {
+                "name": listener.get("name"),
+                "hostname": listener.get("hostname"),
+                "port": listener.get("port"),
+                "protocol": listener.get("protocol"),
+            }
+            for listener in (spec.get("listeners") or [])
+        ],
     }
 
 
@@ -66,7 +78,12 @@ def _map_http_route(item: dict) -> dict:
     namespace = meta.get("namespace", "")
     name = meta.get("name", "")
 
-    parent_names = [p.get("name") for p in (spec.get("parentRefs") or []) if p.get("name")]
+    parent_refs = [p for p in (spec.get("parentRefs") or []) if p.get("name")]
+    parent_names = [p["name"] for p in parent_refs]
+    # namespace is optional on a parentRef -- defaults to the route's own namespace per the
+    # Gateway API spec (a cross-namespace reference always sets it explicitly; same-namespace
+    # references usually don't bother, per the spec's own examples).
+    parent_namespaces = [p.get("namespace") or namespace for p in parent_refs]
     backend_names = sorted({
         b.get("name")
         for rule in (spec.get("rules") or [])
@@ -102,6 +119,7 @@ def _map_http_route(item: dict) -> dict:
         "namespace": namespace,
         "hostnames": spec.get("hostnames") or [],
         "parent_names": parent_names,
+        "parent_namespaces": parent_namespaces,
         "backend_names": backend_names,
         "accepted": accepted,
         "resolved_refs": resolved_refs,

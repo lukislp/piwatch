@@ -33,6 +33,7 @@ class ClusterState:
         self.statefulsets: dict[str, dict[str, Any]] = {}  # key: ns/name
         self.daemonsets: dict[str, dict[str, Any]] = {}    # key: ns/name
         self.services: dict[str, dict[str, Any]] = {}      # key: ns/name; LoadBalancer-type only
+        self.hpas: dict[str, dict[str, Any]] = {}           # key: ns/name
         self.orphaned_pvs: dict[str, dict[str, Any]] = {}  # key: PV name; Released/Failed only
         self.events: deque[dict[str, Any]] = deque(maxlen=EVENTS_LEN)
 
@@ -146,6 +147,14 @@ class ClusterState:
     def remove_service(self, key: str) -> None:
         self.services.pop(key, None)
         self.publish("service_deleted", {"key": key})
+
+    def upsert_hpa(self, key: str, obj: dict) -> None:
+        self.hpas[key] = obj
+        self.publish("hpa", obj)
+
+    def remove_hpa(self, key: str) -> None:
+        self.hpas.pop(key, None)
+        self.publish("hpa_deleted", {"key": key})
 
     def upsert_orphaned_pv(self, key: str, obj: dict) -> None:
         self.orphaned_pvs[key] = obj
@@ -263,6 +272,7 @@ class ClusterState:
             "statefulsets": self.statefulsets,
             "daemonsets": self.daemonsets,
             "services": self.services,
+            "hpas": self.hpas,
             "orphaned_pvs": self.orphaned_pvs,
             "events": list(self.events),
             "node_metrics": self.node_metrics,

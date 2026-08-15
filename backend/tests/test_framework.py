@@ -135,6 +135,36 @@ def _service_obj(name="svc1", namespace="default", svc_type="LoadBalancer", ingr
     return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
 
 
+def _hpa_obj(
+    name="h1", namespace="default", target_kind="Deployment", target_name="d1",
+    min_replicas=1, max_replicas=5, current_replicas=2, desired_replicas=2,
+    target_pct=70, current_pct=82, metric_type="Resource",
+    able_to_scale="True", scaling_active="True", scaling_limited="False",
+):
+    metadata = types.SimpleNamespace(name=name, namespace=namespace)
+    target = types.SimpleNamespace(kind=target_kind, name=target_name)
+    metric_target = types.SimpleNamespace(average_utilization=target_pct)
+    resource_metric = types.SimpleNamespace(name="cpu", target=metric_target)
+    metrics = [types.SimpleNamespace(type=metric_type, resource=resource_metric)]
+    spec = types.SimpleNamespace(
+        scale_target_ref=target, min_replicas=min_replicas, max_replicas=max_replicas,
+        metrics=metrics,
+    )
+    metric_current = types.SimpleNamespace(average_utilization=current_pct)
+    resource_current = types.SimpleNamespace(name="cpu", current=metric_current)
+    current_metrics = [types.SimpleNamespace(type=metric_type, resource=resource_current)]
+    conditions = [
+        types.SimpleNamespace(type="AbleToScale", status=able_to_scale),
+        types.SimpleNamespace(type="ScalingActive", status=scaling_active),
+        types.SimpleNamespace(type="ScalingLimited", status=scaling_limited),
+    ]
+    status = types.SimpleNamespace(
+        current_replicas=current_replicas, desired_replicas=desired_replicas,
+        current_metrics=current_metrics, conditions=conditions,
+    )
+    return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
+
+
 def _pv_obj(
     name="pv1", phase="Released", capacity="5Gi", storage_class="local-path",
     reclaim_policy="Retain", claim_namespace="home", claim_name="old-claim",
@@ -330,6 +360,34 @@ def test_map_service_no_ingress_yet_is_empty_external_ips():
     assert d["external_ips"] == []
 
 
+def test_map_hpa_extracts_target_replicas_and_resource_metrics():
+    from app.collectors.k8s_watch import map_hpa
+
+    d = map_hpa(_hpa_obj())
+    assert d["key"] == "default/h1"
+    assert d["target_kind"] == "Deployment"
+    assert d["target_name"] == "d1"
+    assert d["min_replicas"] == 1
+    assert d["max_replicas"] == 5
+    assert d["current_replicas"] == 2
+    assert d["desired_replicas"] == 2
+    assert d["metrics"] == [{"name": "cpu", "target_pct": 70}]
+    assert d["current_metrics"] == [{"name": "cpu", "current_pct": 82}]
+    assert d["able_to_scale"] == "True"
+    assert d["scaling_active"] == "True"
+    assert d["scaling_limited"] == "False"
+
+
+def test_map_hpa_ignores_non_resource_metrics():
+    """Pods/Object/External metrics don't have a universal target-% shape --
+    see the comment in map_hpa. Just skipped, not an error."""
+    from app.collectors.k8s_watch import map_hpa
+
+    d = map_hpa(_hpa_obj(metric_type="External"))
+    assert d["metrics"] == []
+    assert d["current_metrics"] == []
+
+
 def test_map_pv_extracts_phase_capacity_and_stale_claim_ref():
     from app.collectors.k8s_watch import map_pv
 
@@ -400,6 +458,11 @@ def test_apply_all_kinds_upsert_and_delete():
     _apply(st, "services", "ADDED", {"key": "ns/svc1", "type": "LoadBalancer"})
     _apply(st, "services", "DELETED", {"key": "ns/svc1", "type": "LoadBalancer"})
     assert "ns/svc1" not in st.services
+
+    _apply(st, "hpas", "ADDED", {"key": "ns/h1"})
+    assert "ns/h1" in st.hpas
+    _apply(st, "hpas", "DELETED", {"key": "ns/h1"})
+    assert "ns/h1" not in st.hpas
 
     _apply(st, "persistentvolumes", "ADDED", {"key": "pv1", "phase": "Released"})
     assert "pv1" in st.orphaned_pvs
@@ -501,7 +564,7 @@ class _FakeWatch:
 
 def _patch_k8s_client(
     monkeypatch, nodes=None, pods=None, deployments=None, statefulsets=None, daemonsets=None,
-    services=None, persistentvolumes=None, events=None,
+    services=None, hpas=None, persistentvolumes=None, events=None,
 ):
     """Patch kubernetes_asyncio.client's Api classes used by _watch_loop."""
     from kubernetes_asyncio import client as kclient
@@ -538,9 +601,17 @@ def _patch_k8s_client(
         async def list_daemon_set_for_all_namespaces(self):
             return _FakeList(daemonsets or [])
 
+    class _FakeAutoscalingV2Api:
+        def __init__(self, api_client):
+            pass
+
+        async def list_horizontal_pod_autoscaler_for_all_namespaces(self):
+            return _FakeList(hpas or [])
+
     monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
     monkeypatch.setattr(kclient, "CoreV1Api", _FakeCoreV1Api)
     monkeypatch.setattr(kclient, "AppsV1Api", _FakeAppsV1Api)
+    monkeypatch.setattr(kclient, "AutoscalingV2Api", _FakeAutoscalingV2Api)
 
 
 @pytest.mark.parametrize(
@@ -552,6 +623,7 @@ def _patch_k8s_client(
         ("statefulsets", "statefulsets", _statefulset_obj(), _statefulset_obj(name="s2")),
         ("daemonsets", "daemonsets", _daemonset_obj(), _daemonset_obj(name="ds2")),
         ("services", "services", _service_obj(), _service_obj(name="svc2")),
+        ("hpas", "hpas", _hpa_obj(), _hpa_obj(name="h2")),
         ("events", "events", _event_obj(), _event_obj(uid="e2")),
     ],
 )
@@ -714,7 +786,7 @@ def test_watch_loop_backoff_grows_across_repeated_failures(monkeypatch):
     assert sleep_calls == [1, 2]
 
 
-def test_run_starts_all_eight_watch_loops(monkeypatch):
+def test_run_starts_all_nine_watch_loops(monkeypatch):
     from app.collectors import k8s_watch
     from app.state import ClusterState
 
@@ -733,7 +805,7 @@ def test_run_starts_all_eight_watch_loops(monkeypatch):
     asyncio.run(k8s_watch.run(st))
     assert calls[0] == "config"
     assert set(calls[1:]) == {
-        "nodes", "pods", "deployments", "statefulsets", "daemonsets", "services",
+        "nodes", "pods", "deployments", "statefulsets", "daemonsets", "services", "hpas",
         "persistentvolumes", "events",
     }
 

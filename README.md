@@ -74,6 +74,10 @@ cluster involved.
 - **Orphaned PersistentVolume detection**: a Workloads-page card lists any PersistentVolume
   stuck in `Released` or `Failed` phase -- storage left behind after its PVC was deleted (common
   with a `Retain` reclaim policy) that nothing else surfaces. Hidden entirely when there aren't any
+- **Autoscaler status**: an "Autoscalers" card on the Workloads page lists every
+  HorizontalPodAutoscaler with its target, current/min/max replicas and current vs. target
+  CPU/memory utilization, flagging one that's hit its scaling limit or can't scale at all.
+  Hidden entirely if you don't use HPAs
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Auto-discovered healthchecks** (optional, set `PIWATCH_AUTO_HEALTHCHECKS=1`): a check for
   every accepted HTTPRoute (HTTP(S) request straight to its Gateway's Service ClusterIP, with

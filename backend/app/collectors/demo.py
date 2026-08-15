@@ -197,6 +197,29 @@ async def run(state: ClusterState):
             "scaling_limited": "False",
         },
     )
+    # Sitting at its floor under low load -- ScalingLimited=True here is normal/expected
+    # (the HPA wants to scale below min_replicas but can't), NOT a real problem. Showcases
+    # that the Autoscalers card correctly shows "OK", not a false "limited" warning
+    # (verified live: a real HPA in this exact situation, see the fix's commit message).
+    state.upsert_hpa(
+        "nginx-gateway/studylife-gateway-nginx",
+        {
+            "key": "nginx-gateway/studylife-gateway-nginx",
+            "name": "studylife-gateway-nginx",
+            "namespace": "nginx-gateway",
+            "target_kind": "Deployment",
+            "target_name": "studylife-gateway-nginx",
+            "min_replicas": 2,
+            "max_replicas": 4,
+            "current_replicas": 2,
+            "desired_replicas": 2,
+            "metrics": [{"name": "cpu", "target_pct": 70}],
+            "current_metrics": [{"name": "cpu", "current_pct": 11}],
+            "able_to_scale": "True",
+            "scaling_active": "True",
+            "scaling_limited": "True",
+        },
+    )
 
     # --- seed LoadBalancer Services (showcases the Overview page's LoadBalancer status,
     # one healthy with an assigned address, one still Pending) ---

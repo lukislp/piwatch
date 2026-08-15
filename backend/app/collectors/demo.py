@@ -66,7 +66,14 @@ async def run(state: ClusterState):
             {
                 "name": name,
                 "ready": True,
-                "conditions": {"Ready": "True"},
+                # pi-worker-2 shows a demo DiskPressure warning -- showcases the
+                # Overview page's node-pressure indicator without needing a real
+                # disk-full node.
+                "conditions": (
+                    {"Ready": "True", "DiskPressure": "True"}
+                    if name == "pi-worker-2"
+                    else {"Ready": "True"}
+                ),
                 "roles": ["control-plane"] if i == 0 else ["worker"],
                 "arch": "arm64",
                 "kubelet": "v1.29.4+k3s1",
@@ -91,12 +98,18 @@ async def run(state: ClusterState):
                 "phase": "Running",
                 "reason": None,
                 "ready": "1/1",
-                "restarts": rng.randint(0, 3),
+                # node-red/coredns always show >=1 so their restart-reason tooltip
+                # showcase (see last_exit_reason below) isn't hidden by chance.
+                "restarts": rng.randint(1, 3) if pod in ("node-red-59fd7", "coredns-6799f") else rng.randint(0, 3),
                 "containers": [pod.rsplit("-", 1)[0]],
                 "images": [image],
                 # node-red is the one demo pod that's been OOMKilled (and since
                 # recovered) -- showcases the Workloads tab's OOM indicator.
                 "oom_killed": pod == "node-red-59fd7",
+                # Restarts-column tooltip showcase: node-red's restart was the OOM kill
+                # above, coredns' was a plain crash -- two different reasons/exit codes.
+                "last_exit_reason": "OOMKilled" if pod == "node-red-59fd7" else ("Error" if pod == "coredns-6799f" else None),
+                "last_exit_code": 137 if pod == "node-red-59fd7" else (1 if pod == "coredns-6799f" else None),
                 "created": time.time() - rng.randint(3600, 86400 * 7),
             },
         )

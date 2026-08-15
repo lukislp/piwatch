@@ -29,6 +29,12 @@ cluster involved.
   PiWatch doesn't watch ReplicaSets/ownerReferences)
 - **OOMKilled detection**: flags a pod in the Workloads table when a container was killed for
   exceeding its memory limit, even after kubelet already restarted it back to Running
+- **Restart reason on hover**: the Workloads table's Restarts count shows the last container
+  termination reason and exit code as a tooltip (e.g. `Error (exit 1)`) -- current state takes
+  priority, falling back to `last_state` when kubelet already restarted the container
+- **Node pressure conditions**: the Overview page's node cards show a Pressure indicator
+  (MemoryPressure/DiskPressure/PIDPressure) -- an earlier warning than waiting for the node to
+  go NotReady entirely
 - **Per-pod CPU/RAM usage**: live usage per pod/workload via metrics-server, right in the Workloads table
 - **Pi hardware**: CPU temperature, load, RAM, disk, uptime per node (DaemonSet agent)
 - **NVMe + power health**: dedicated NVMe tab per node -- temperature, model, firmware,

@@ -58,17 +58,22 @@ def _node_obj(name="pi-1", role_label=True, with_optional=True):
 
 def _pod_obj(
     name="p1", namespace="default", waiting=False, no_statuses=False,
-    oom=False, oom_in_last_state=False,
+    oom=False, oom_in_last_state=False, terminated=None, last_terminated=None,
 ):
+    """terminated/last_terminated: optional (reason, exit_code) tuples for the
+    container's current/last state, independent of the oom convenience flags
+    (which just set reason="OOMKilled", exit_code=137 -- SIGKILL)."""
     if no_statuses:
         statuses = []
     else:
+        cur_reason, cur_code = ("OOMKilled", 137) if oom else (terminated or (None, None))
+        last_reason, last_code = ("OOMKilled", 137) if oom_in_last_state else (last_terminated or (None, None))
         state = types.SimpleNamespace(
             waiting=types.SimpleNamespace(reason="CrashLoopBackOff") if waiting else None,
-            terminated=types.SimpleNamespace(reason="OOMKilled") if oom else None,
+            terminated=types.SimpleNamespace(reason=cur_reason, exit_code=cur_code) if cur_reason else None,
         )
         last_state = types.SimpleNamespace(
-            terminated=types.SimpleNamespace(reason="OOMKilled") if oom_in_last_state else None
+            terminated=types.SimpleNamespace(reason=last_reason, exit_code=last_code) if last_reason else None
         )
         statuses = [
             types.SimpleNamespace(
@@ -194,6 +199,42 @@ def test_map_pod_detects_oom_killed_in_last_state():
 
     d = map_pod(_pod_obj(oom_in_last_state=True))
     assert d["oom_killed"] is True
+
+
+def test_map_pod_last_exit_reason_prefers_current_terminated_state():
+    """A container terminated RIGHT NOW (e.g. a finished one-shot container)
+    takes priority over last_state."""
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(terminated=("Completed", 0), last_terminated=("Error", 1)))
+    assert d["last_exit_reason"] == "Completed"
+    assert d["last_exit_code"] == 0
+
+
+def test_map_pod_last_exit_reason_falls_back_to_last_state():
+    """Common case: kubelet already restarted the container back to Running,
+    but last_state still holds the forensic info about the crash."""
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(last_terminated=("Error", 1)))
+    assert d["last_exit_reason"] == "Error"
+    assert d["last_exit_code"] == 1
+
+
+def test_map_pod_last_exit_reason_none_when_never_terminated():
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj())
+    assert d["last_exit_reason"] is None
+    assert d["last_exit_code"] is None
+
+
+def test_map_pod_oom_killed_sets_last_exit_reason_too():
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(oom=True))
+    assert d["last_exit_reason"] == "OOMKilled"
+    assert d["last_exit_code"] == 137
 
 
 def test_map_deployment():

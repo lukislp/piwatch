@@ -58,6 +58,17 @@ def _terminated_reason(state) -> str | None:
     return state.terminated.reason if state and state.terminated else None
 
 
+def _last_termination(state, last_state) -> tuple[str | None, int | None]:
+    """(reason, exit_code) for whichever is more current: a container that's
+    terminated RIGHT NOW (e.g. a finished one-shot container) takes priority
+    over last_state (kubelet already restarted it back to Running, but
+    last_state still holds the forensic info about that crash)."""
+    term = (state.terminated if state and state.terminated else None) or (
+        last_state.terminated if last_state and last_state.terminated else None
+    )
+    return (term.reason, term.exit_code) if term else (None, None)
+
+
 def map_pod(p) -> dict:
     statuses = p.status.container_statuses or []
     restarts = sum(s.restart_count for s in statuses)
@@ -67,11 +78,15 @@ def map_pod(p) -> dict:
     # them and they go back to Running. last_state is what still shows the OOM after that,
     # so both current and last state need checking to not miss a since-recovered kill.
     oom_killed = False
+    last_exit_reason = None
+    last_exit_code = None
     for s in statuses:
         if s.state and s.state.waiting:
             waiting_reason = s.state.waiting.reason
         if "OOMKilled" in (_terminated_reason(s.state), _terminated_reason(s.last_state)):
             oom_killed = True
+        if last_exit_reason is None:
+            last_exit_reason, last_exit_code = _last_termination(s.state, s.last_state)
     return {
         "key": f"{p.metadata.namespace}/{p.metadata.name}",
         "name": p.metadata.name,
@@ -84,6 +99,8 @@ def map_pod(p) -> dict:
         "containers": [c.name for c in (p.spec.containers or [])],
         "images": [c.image for c in (p.spec.containers or [])],
         "oom_killed": oom_killed,
+        "last_exit_reason": last_exit_reason,
+        "last_exit_code": last_exit_code,
         "created": p.metadata.creation_timestamp.timestamp() if p.metadata.creation_timestamp else None,
     }
 

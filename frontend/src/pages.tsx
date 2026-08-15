@@ -315,7 +315,12 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
                   <td>{p.name}</td>
                   <td className="muted">{p.namespace}</td>
                   <td>{p.node && <><Dot color={seriesColor(p.node, mode)} />{p.node}</>}</td>
-                  <td><Dot color={ok ? STATUS.good : STATUS.critical} />{p.reason ?? p.phase}</td>
+                  <td>
+                    <Dot color={ok ? STATUS.good : STATUS.critical} />{p.reason ?? p.phase}
+                    {p.oom_killed && (
+                      <span style={{ color: STATUS.critical }} title="A container in this pod was OOMKilled"> ⚠ OOM</span>
+                    )}
+                  </td>
                   <td className="num">{p.ready}</td>
                   <td className="num" style={p.restarts > 3 ? { color: STATUS.warning } : undefined}>{p.restarts}</td>
                   <td className="num muted">{m?.cpu_cores != null ? `${Math.round(m.cpu_cores * 1000)}m` : "–"}</td>

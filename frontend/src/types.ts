@@ -24,6 +24,7 @@ export interface PodInfo {
   restarts: number;
   containers: string[];
   images: string[];
+  oom_killed: boolean;
   created?: number;
 }
 

@@ -23,6 +23,7 @@ export interface PodInfo {
   ready: string;
   restarts: number;
   containers: string[];
+  images: string[];
   created?: number;
 }
 

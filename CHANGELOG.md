@@ -1,3 +1,10 @@
+## [1.21.1](https://github.com/lukislp/piwatch/compare/v1.21.0...v1.21.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* HPA scaling-limited false positive when capped at the floor ([50b0e92](https://github.com/lukislp/piwatch/commit/50b0e92c6657e9a99a3b9ac42b509115724300da))
+
 # [1.21.0](https://github.com/lukislp/piwatch/compare/v1.20.0...v1.21.0) (2026-08-15)
 
 

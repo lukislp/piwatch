@@ -64,8 +64,12 @@ export interface NodeMetrics {
   undervoltage?: boolean;
   nvme_temp_c?: number;
   nvme_model?: string;
+  nvme_firmware?: string;
+  nvme_serial?: string;
   nvme_capacity_bytes?: number;
   nvme_percent_used?: number;
+  nvme_avail_spare?: number;
+  nvme_spare_thresh?: number;
   nvme_power_on_hours?: number;
   nvme_unsafe_shutdowns?: number;
   nvme_media_errors?: number;
@@ -73,6 +77,14 @@ export interface NodeMetrics {
   nvme_power_cycles?: number;
   nvme_data_units_read?: number;
   nvme_data_units_written?: number;
+  nvme_host_read_commands?: number;
+  nvme_host_write_commands?: number;
+  nvme_controller_busy_time?: number;
+  nvme_warning_temp_time?: number;
+  nvme_critical_comp_time?: number;
+  nvme_num_err_log_entries?: number;
+  nvme_read_bytes_per_s?: number;
+  nvme_write_bytes_per_s?: number;
 }
 
 export interface PodMetrics {
@@ -86,6 +98,8 @@ export interface HistoryPoint {
   cpu_pct?: number;
   mem_pct?: number;
   temp_c?: number;
+  nvme_read_bytes_per_s?: number;
+  nvme_write_bytes_per_s?: number;
   [k: string]: number | undefined;
 }
 

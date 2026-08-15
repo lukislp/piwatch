@@ -24,8 +24,11 @@ cluster involved.
 - **Kubernetes live**: nodes, pods, deployments, events via the watch API (no polling)
 - **Per-pod CPU/RAM usage**: live usage per pod/workload via metrics-server, right in the Workloads table
 - **Pi hardware**: CPU temperature, load, RAM, disk, uptime per node (DaemonSet agent)
-- **NVMe + power health**: SSD temperature/model/capacity and full SMART (wear %, power-on
-  hours, media errors), plus the Pi firmware's under-voltage (bad PSU/PoE) flag
+- **NVMe + power health**: dedicated NVMe tab per node -- temperature, model, firmware,
+  serial, capacity, wear %/spare capacity, power-on hours, power cycles, unsafe shutdowns,
+  total data read/written, host command counts, error counts, and live read/write
+  throughput charts. Plus the Pi firmware's under-voltage (bad PSU/PoE) flag, surfaced as a
+  plain OK/error indicator on the Overview page
 - **Metrics**: CPU/RAM usage via metrics-server (bundled with k3s), ~3h history
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Live logs** for any pod, right in the browser

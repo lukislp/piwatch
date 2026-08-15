@@ -37,7 +37,8 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
         {nodes.sort((a, b) => a.name.localeCompare(b.name)).map((n) => {
           const m = snap.node_metrics[n.name] ?? {};
           const hw = snap.hardware[n.name] ?? {};
-          const nvmeWarn = !!hw.nvme_critical_warning || !!hw.nvme_media_errors;
+          const nvmeError =
+            !!hw.nvme_critical_warning || !!hw.nvme_media_errors || !!hw.nvme_num_err_log_entries;
           return (
             <div className="card" key={n.name}>
               <div className="row" style={{ justifyContent: "space-between" }}>
@@ -62,9 +63,12 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
                     <tr>
                       <td className="muted">NVMe</td>
                       <td className="num">
-                        {hw.nvme_temp_c.toFixed(1)} °C
-                        {hw.nvme_percent_used != null ? ` · ${hw.nvme_percent_used}% worn` : ""}
-                        {nvmeWarn && <span style={{ color: STATUS.critical }}> ⚠</span>}
+                        {nvmeError ? (
+                          <span style={{ color: STATUS.critical }}>⚠ Errors</span>
+                        ) : (
+                          <span style={{ color: STATUS.good }}>OK</span>
+                        )}
+                        {" "}(see NVMe tab)
                       </td>
                     </tr>
                   )}
@@ -85,6 +89,119 @@ export function Nodes({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       <NodeChart histories={snap.node_history} field="cpu_pct" mode={mode} unit="%" domain={[0, 100]} title="CPU usage" />
       <NodeChart histories={snap.node_history} field="mem_pct" mode={mode} unit="%" domain={[0, 100]} title="RAM usage" />
       <NodeChart histories={snap.node_history} field="temp_c" mode={mode} unit="°C" domain={[30, 90]} title="CPU temperature" />
+    </>
+  );
+}
+
+// ---------------- NVMe ----------------
+function fmtBytes(b?: number): string {
+  if (b == null) return "–";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let v = b;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
+}
+
+// NVMe "data units" are 512000-byte units per the NVMe spec (not 512-byte sectors).
+const fmtDataUnits = (units?: number) => (units == null ? "–" : fmtBytes(units * 512_000));
+
+function scaledHistory(
+  history: Snapshot["node_history"],
+  field: string,
+  divisor: number,
+  outKey: string
+): Snapshot["node_history"] {
+  const out: Snapshot["node_history"] = {};
+  for (const [node, points] of Object.entries(history)) {
+    out[node] = points.map((p) => ({ t: p.t, [outKey]: p[field] != null ? p[field]! / divisor : undefined }));
+  }
+  return out;
+}
+
+export function Nvme({ snap, mode }: { snap: Snapshot; mode: Mode }) {
+  const nodes = Object.values(snap.nodes)
+    .filter((n) => snap.hardware[n.name]?.nvme_temp_c != null || snap.hardware[n.name]?.nvme_model != null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (nodes.length === 0) {
+    return <div className="card muted">No NVMe drive detected on any node.</div>;
+  }
+
+  return (
+    <>
+      <div className="grid cards">
+        {nodes.map((n) => {
+          const hw = snap.hardware[n.name] ?? {};
+          const errorCount = (hw.nvme_media_errors ?? 0) + (hw.nvme_num_err_log_entries ?? 0);
+          const hasError = !!hw.nvme_critical_warning || errorCount > 0;
+          const spareLow =
+            hw.nvme_avail_spare != null && hw.nvme_spare_thresh != null && hw.nvme_avail_spare <= hw.nvme_spare_thresh;
+          return (
+            <div className="card" key={n.name}>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <strong><Dot color={seriesColor(n.name, mode)} />{n.name}</strong>
+                <StatusBadge ok={!hasError && !spareLow} okText="OK" badText="Attention" />
+              </div>
+              <div className="muted" style={{ marginTop: 2 }}>
+                {hw.nvme_model ?? "Unknown model"}
+                {hw.nvme_capacity_bytes ? ` · ${fmtBytes(hw.nvme_capacity_bytes)}` : ""}
+              </div>
+              <table style={{ marginTop: 8 }}>
+                <tbody>
+                  <tr><td className="muted">Firmware / Serial</td><td className="num">{hw.nvme_firmware ?? "–"} / {hw.nvme_serial ?? "–"}</td></tr>
+                  <tr><td className="muted">Temperature</td><td className="num">{hw.nvme_temp_c != null ? `${hw.nvme_temp_c.toFixed(1)} °C` : "–"}</td></tr>
+                  <tr>
+                    <td className="muted">Wear / Spare</td>
+                    <td className="num">
+                      {hw.nvme_percent_used != null ? `${hw.nvme_percent_used}% used` : "–"} ·{" "}
+                      <span style={spareLow ? { color: STATUS.critical } : undefined}>
+                        {hw.nvme_avail_spare != null ? `${hw.nvme_avail_spare}% spare` : "–"}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr><td className="muted">Power-on / Cycles</td><td className="num">{hw.nvme_power_on_hours != null ? `${hw.nvme_power_on_hours}h` : "–"} / {hw.nvme_power_cycles ?? "–"}</td></tr>
+                  <tr>
+                    <td className="muted">Unsafe shutdowns</td>
+                    <td className="num" style={(hw.nvme_unsafe_shutdowns ?? 0) > 0 ? { color: STATUS.warning } : undefined}>
+                      {hw.nvme_unsafe_shutdowns ?? "–"}
+                    </td>
+                  </tr>
+                  <tr><td className="muted">Data read / written</td><td className="num">{fmtDataUnits(hw.nvme_data_units_read)} / {fmtDataUnits(hw.nvme_data_units_written)}</td></tr>
+                  <tr><td className="muted">Host read / write cmds</td><td className="num">{hw.nvme_host_read_commands?.toLocaleString() ?? "–"} / {hw.nvme_host_write_commands?.toLocaleString() ?? "–"}</td></tr>
+                  <tr>
+                    <td className="muted">Errors</td>
+                    <td className="num" style={hasError ? { color: STATUS.critical } : undefined}>
+                      {hasError
+                        ? `${hw.nvme_media_errors ?? 0} media, ${hw.nvme_num_err_log_entries ?? 0} logged, warning flag ${hw.nvme_critical_warning ?? 0}`
+                        : "None"}
+                    </td>
+                  </tr>
+                  {(hw.nvme_warning_temp_time || hw.nvme_critical_comp_time) ? (
+                    <tr>
+                      <td className="muted">Thermal throttle time</td>
+                      <td className="num">{hw.nvme_warning_temp_time ?? 0}s warn / {hw.nvme_critical_comp_time ?? 0}s critical</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+      <NodeChart
+        histories={scaledHistory(snap.node_history, "nvme_read_bytes_per_s", 1024 * 1024, "read_mb")}
+        field="read_mb" mode={mode} unit=" MB/s" title="NVMe read throughput"
+        axisWidth={70} yTickFormatter={(v) => `${v.toFixed(v < 10 ? 1 : 0)} MB/s`}
+      />
+      <NodeChart
+        histories={scaledHistory(snap.node_history, "nvme_write_bytes_per_s", 1024 * 1024, "write_mb")}
+        field="write_mb" mode={mode} unit=" MB/s" title="NVMe write throughput"
+        axisWidth={70} yTickFormatter={(v) => `${v.toFixed(v < 10 ? 1 : 0)} MB/s`}
+      />
     </>
   );
 }

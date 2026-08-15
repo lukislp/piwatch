@@ -233,6 +233,8 @@ def test_read_undervoltage_none_without_rpi_volt_hwmon(tmp_path, monkeypatch):
 def test_read_nvme_smart_parses_known_fields_and_drops_the_rest(monkeypatch):
     payload = {
         "percent_used": 3,
+        "avail_spare": 100,
+        "spare_thresh": 10,
         "power_on_hours": 696,
         "unsafe_shutdowns": 21,
         "media_errors": 0,
@@ -240,8 +242,14 @@ def test_read_nvme_smart_parses_known_fields_and_drops_the_rest(monkeypatch):
         "power_cycles": 23,
         "data_units_read": 1454046,
         "data_units_written": 1658016,
+        "host_read_commands": 21916676,
+        "host_write_commands": 34912549,
+        "controller_busy_time": 3987,
+        "warning_temp_time": 0,
+        "critical_comp_time": 0,
+        "num_err_log_entries": 0,
         "temperature": 307,  # deliberately ignored -- sysfs hwmon is the temperature source
-        "avail_spare": 100,  # not in NVME_SMART_FIELDS -- must be dropped
+        "endurance_grp_critical_warning_summary": 0,  # not in NVME_SMART_FIELDS -- must be dropped
     }
 
     def fake_run(cmd, **kwargs):
@@ -252,6 +260,8 @@ def test_read_nvme_smart_parses_known_fields_and_drops_the_rest(monkeypatch):
     monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
     assert node_agent.read_nvme_smart() == {
         "nvme_percent_used": 3,
+        "nvme_avail_spare": 100,
+        "nvme_spare_thresh": 10,
         "nvme_power_on_hours": 696,
         "nvme_unsafe_shutdowns": 21,
         "nvme_media_errors": 0,
@@ -259,6 +269,12 @@ def test_read_nvme_smart_parses_known_fields_and_drops_the_rest(monkeypatch):
         "nvme_power_cycles": 23,
         "nvme_data_units_read": 1454046,
         "nvme_data_units_written": 1658016,
+        "nvme_host_read_commands": 21916676,
+        "nvme_host_write_commands": 34912549,
+        "nvme_controller_busy_time": 3987,
+        "nvme_warning_temp_time": 0,
+        "nvme_critical_comp_time": 0,
+        "nvme_num_err_log_entries": 0,
     }
 
 
@@ -287,6 +303,60 @@ def test_read_nvme_smart_returns_empty_dict_on_malformed_json(monkeypatch):
 
     monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
     assert node_agent.read_nvme_smart() == {}
+
+
+def test_read_nvme_ctrl_info_parses_firmware_and_serial(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        assert cmd[:2] == ["nvme", "id-ctrl"]
+        return types.SimpleNamespace(stdout=json.dumps({"fr": "VDV10184  ", "sn": "S6RLNJ0T123456", "mn": "ignored here"}))
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+    assert node_agent.read_nvme_ctrl_info() == {"nvme_firmware": "VDV10184", "nvme_serial": "S6RLNJ0T123456"}
+
+
+def test_read_nvme_ctrl_info_returns_empty_dict_when_unprivileged(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        raise subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+    assert node_agent.read_nvme_ctrl_info() == {}
+
+
+def test_nvme_io_rate_returns_empty_on_first_sample(monkeypatch):
+    """No prior sample yet -- nothing to derive a rate from."""
+    monkeypatch.setattr(node_agent, "_last_nvme_io", None)
+    assert node_agent._nvme_io_rate(1000, 2000) == {}
+
+
+def test_nvme_io_rate_computes_bytes_per_second_between_samples(monkeypatch):
+    monkeypatch.setattr(node_agent, "_last_nvme_io", None)
+    times = iter([100.0, 105.0])
+    monkeypatch.setattr(node_agent, "time", types.SimpleNamespace(monotonic=lambda: next(times)))
+
+    assert node_agent._nvme_io_rate(1000, 2000) == {}  # seeds the first sample
+    # +50 units read, +100 units written over 5s -> bytes/s = units * 512000 / elapsed
+    result = node_agent._nvme_io_rate(1050, 2100)
+    assert result == {
+        "nvme_read_bytes_per_s": round(50 * 512_000 / 5),
+        "nvme_write_bytes_per_s": round(100 * 512_000 / 5),
+    }
+
+
+def test_nvme_io_rate_clamps_negative_deltas_to_zero(monkeypatch):
+    """A counter reset (e.g. drive replaced) must not produce a negative rate."""
+    monkeypatch.setattr(node_agent, "_last_nvme_io", None)
+    times = iter([100.0, 105.0])
+    monkeypatch.setattr(node_agent, "time", types.SimpleNamespace(monotonic=lambda: next(times)))
+
+    node_agent._nvme_io_rate(1000, 2000)
+    result = node_agent._nvme_io_rate(500, 2100)
+    assert result["nvme_read_bytes_per_s"] == 0
+    assert result["nvme_write_bytes_per_s"] == round(100 * 512_000 / 5)
+
+
+def test_nvme_io_rate_returns_empty_when_counters_unavailable(monkeypatch):
+    monkeypatch.setattr(node_agent, "_last_nvme_io", None)
+    assert node_agent._nvme_io_rate(None, None) == {}
 
 
 def _seed_full_node_agent_fs(tmp_path, monkeypatch):
@@ -325,11 +395,14 @@ def test_metrics_endpoint_full_data(tmp_path, monkeypatch):
 
 
 def test_metrics_endpoint_includes_nvme_and_power_data_when_present(tmp_path, monkeypatch):
-    """End-to-end: hwmon (nvme + rpi_volt), the nvme0n1 block device, and a
-    mocked `nvme smart-log` all merge into one /metrics payload."""
+    """End-to-end: hwmon (nvme + rpi_volt), the nvme0n1 block device, and mocked
+    `nvme smart-log`/`id-ctrl` calls all merge into one /metrics payload. A
+    second poll additionally exercises the read/write throughput rate, which
+    needs two samples to derive anything from."""
     from fastapi.testclient import TestClient
 
     _seed_full_node_agent_fs(tmp_path, monkeypatch)
+    monkeypatch.setattr(node_agent, "_last_nvme_io", None)
     sys_dir = tmp_path / "sys"
     _write_hwmon(sys_dir, "1", "nvme", {"temp1_input": "36847"})
     _write_hwmon(sys_dir, "3", "rpi_volt", {"in0_lcrit_alarm": "1"})
@@ -338,20 +411,43 @@ def test_metrics_endpoint_includes_nvme_and_power_data_when_present(tmp_path, mo
     (block / "model").write_text("Intenso SSD")
     (sys_dir / "block" / "nvme0n1" / "size").write_text("488397168")
 
+    data_units = {"read": 1_000_000, "written": 2_000_000}
+
     def fake_run(cmd, **kwargs):
-        return types.SimpleNamespace(stdout=json.dumps({"percent_used": 3, "power_on_hours": 696}))
+        if cmd[1] == "smart-log":
+            return types.SimpleNamespace(stdout=json.dumps({
+                "percent_used": 3,
+                "avail_spare": 100,
+                "power_on_hours": 696,
+                "data_units_read": data_units["read"],
+                "data_units_written": data_units["written"],
+            }))
+        assert cmd[1] == "id-ctrl"
+        return types.SimpleNamespace(stdout=json.dumps({"fr": "VDV10184", "sn": "S6RLNJ0T123456"}))
 
     monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+    times = iter([100.0, 105.0])
+    monkeypatch.setattr(node_agent, "time", types.SimpleNamespace(monotonic=lambda: next(times)))
 
     with TestClient(node_agent.app) as client:
-        body = client.get("/metrics").json()
+        first = client.get("/metrics").json()
+        data_units["read"] += 100  # +100 units over the 5s between the two mocked timestamps
+        data_units["written"] += 200
+        second = client.get("/metrics").json()
 
-    assert body["nvme_temp_c"] == 36.8
-    assert body["nvme_model"] == "Intenso SSD"
-    assert body["nvme_capacity_bytes"] == 488397168 * 512
-    assert body["undervoltage"] is True
-    assert body["nvme_percent_used"] == 3
-    assert body["nvme_power_on_hours"] == 696
+    assert first["nvme_temp_c"] == 36.8
+    assert first["nvme_model"] == "Intenso SSD"
+    assert first["nvme_capacity_bytes"] == 488397168 * 512
+    assert first["undervoltage"] is True
+    assert first["nvme_percent_used"] == 3
+    assert first["nvme_avail_spare"] == 100
+    assert first["nvme_power_on_hours"] == 696
+    assert first["nvme_firmware"] == "VDV10184"
+    assert first["nvme_serial"] == "S6RLNJ0T123456"
+    assert "nvme_read_bytes_per_s" not in first  # first poll: no prior sample to diff against
+
+    assert second["nvme_read_bytes_per_s"] == round(100 * 512_000 / 5)
+    assert second["nvme_write_bytes_per_s"] == round(200 * 512_000 / 5)
 
 
 def test_metrics_endpoint_degrades_gracefully_when_everything_missing(
@@ -363,6 +459,7 @@ def test_metrics_endpoint_degrades_gracefully_when_everything_missing(
     monkeypatch.setattr(node_agent, "PROC", str(tmp_path / "no-proc"))
     monkeypatch.setattr(node_agent, "DISK_PATH", str(tmp_path / "no-disk"))
     monkeypatch.setattr(node_agent, "NODE_NAME", "pi-empty")
+    monkeypatch.setattr(node_agent, "_last_nvme_io", None)
 
     def fake_run(cmd, **kwargs):
         raise FileNotFoundError("nvme: command not found")

@@ -22,6 +22,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 
 from fastapi import FastAPI
 
@@ -34,6 +35,8 @@ NVME_DEVICE = os.environ.get("PIWATCH_NVME_DEVICE", "/dev/nvme0")
 
 NVME_SMART_FIELDS = (
     "percent_used",
+    "avail_spare",
+    "spare_thresh",
     "power_on_hours",
     "unsafe_shutdowns",
     "media_errors",
@@ -41,7 +44,16 @@ NVME_SMART_FIELDS = (
     "power_cycles",
     "data_units_read",
     "data_units_written",
+    "host_read_commands",
+    "host_write_commands",
+    "controller_busy_time",
+    "warning_temp_time",
+    "critical_comp_time",
+    "num_err_log_entries",
 )
+
+# NVMe "data units" are 512000-byte units per the NVMe spec (not 512-byte sectors).
+NVME_DATA_UNIT_BYTES = 512_000
 
 app = FastAPI(title="piwatch node-agent")
 
@@ -172,6 +184,58 @@ def read_nvme_smart() -> dict:
     return {f"nvme_{key}": data[key] for key in NVME_SMART_FIELDS if key in data}
 
 
+def read_nvme_ctrl_info() -> dict:
+    """Firmware revision + serial number via `nvme id-ctrl`. Model/capacity
+    come from sysfs already (read_nvme_info(), unprivileged) -- this only
+    adds the two fields sysfs doesn't expose. Same privilege requirement
+    and failure handling as read_nvme_smart()."""
+    try:
+        result = subprocess.run(
+            ["nvme", "id-ctrl", NVME_DEVICE, "-o", "json"],
+            capture_output=True,
+            timeout=5,
+            check=True,
+            text=True,
+        )
+        data = json.loads(result.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return {}
+    out: dict = {}
+    if "fr" in data:
+        out["nvme_firmware"] = str(data["fr"]).strip()
+    if "sn" in data:
+        out["nvme_serial"] = str(data["sn"]).strip()
+    return out
+
+
+# Previous (timestamp, data_units_read, data_units_written) sample, used to derive a
+# read/write bytes-per-second rate from the cumulative SMART counters below. A node-agent
+# process monitors exactly one NVMe device, so one process-wide sample is enough.
+_last_nvme_io: tuple[float, int, int] | None = None
+
+
+def _nvme_io_rate(units_read: int | None, units_written: int | None) -> dict:
+    """Bytes/s read+write since the previous /metrics call. Empty on the
+    first call (no prior sample yet) or when the SMART counters themselves
+    are unavailable (unprivileged node-agent)."""
+    global _last_nvme_io
+    if units_read is None or units_written is None:
+        return {}
+    now = time.monotonic()
+    prev = _last_nvme_io
+    _last_nvme_io = (now, units_read, units_written)
+    if prev is None:
+        return {}
+    prev_t, prev_read, prev_written = prev
+    elapsed = now - prev_t
+    if elapsed <= 0:
+        return {}
+    return {
+        "nvme_read_bytes_per_s": round(max(0, units_read - prev_read) * NVME_DATA_UNIT_BYTES / elapsed),
+        "nvme_write_bytes_per_s": round(max(0, units_written - prev_written) * NVME_DATA_UNIT_BYTES / elapsed),
+    }
+
+
 @app.get("/metrics")
 def metrics() -> dict:
     load = read_load()
@@ -194,7 +258,10 @@ def metrics() -> dict:
         "undervoltage": read_undervoltage(),
     }
     payload.update(read_nvme_info())
-    payload.update(read_nvme_smart())
+    smart = read_nvme_smart()
+    payload.update(smart)
+    payload.update(read_nvme_ctrl_info())
+    payload.update(_nvme_io_rate(smart.get("nvme_data_units_read"), smart.get("nvme_data_units_written")))
     return payload
 
 

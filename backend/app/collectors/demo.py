@@ -196,6 +196,22 @@ async def run(state: ClusterState):
         },
     )
 
+    # --- seed an orphaned PersistentVolume (showcases the Storage section's
+    # orphaned-PV warning without needing a real Released volume) ---
+    state.upsert_orphaned_pv(
+        "pvc-a1b2c3d4-old-mosquitto-data",
+        {
+            "key": "pvc-a1b2c3d4-old-mosquitto-data",
+            "name": "pvc-a1b2c3d4-old-mosquitto-data",
+            "phase": "Released",
+            "capacity": "1Gi",
+            "storage_class": "local-path",
+            "reclaim_policy": "Retain",
+            "claim_namespace": "home",
+            "claim_name": "mosquitto-data-old",
+        },
+    )
+
     # --- seed Gateway API routing status (showcases the Gateway section even though
     # there's no real Gateway API/cluster behind demo mode) ---
     state.set_gateways(

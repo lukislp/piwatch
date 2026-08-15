@@ -1208,6 +1208,25 @@ def test_upsert_and_remove_service_updates_state_and_publish():
     asyncio.run(scenario())
 
 
+def test_upsert_and_remove_orphaned_pv_updates_state_and_publish():
+    async def scenario():
+        st = ClusterState()
+        q = st.subscribe()
+
+        st.upsert_orphaned_pv("pv-1", {"key": "pv-1"})
+        assert "pv-1" in st.orphaned_pvs
+        assert "orphaned_pvs" in st.snapshot()
+
+        st.remove_orphaned_pv("pv-1")
+        st.remove_orphaned_pv("does-not-exist")  # pop(..., None): must not raise
+        assert "pv-1" not in st.orphaned_pvs
+
+        msgs = [q.get_nowait() for _ in range(2)]
+        assert [m["type"] for m in msgs] == ["orphaned_pv", "orphaned_pv_deleted"]
+
+    asyncio.run(scenario())
+
+
 # ============================ collectors.demo ================================
 
 def test_fake_logs_yields_formatted_lines_and_handles_both_msg_shapes(monkeypatch):

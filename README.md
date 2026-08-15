@@ -71,6 +71,9 @@ cluster involved.
   meaningful usage at all -- kubelet falls back to the underlying node disk's stats instead, so
   PiWatch detects and discards that case too (usage stays blank rather than showing a
   wrong number)
+- **Orphaned PersistentVolume detection**: a Workloads-page card lists any PersistentVolume
+  stuck in `Released` or `Failed` phase -- storage left behind after its PVC was deleted (common
+  with a `Retain` reclaim policy) that nothing else surfaces. Hidden entirely when there aren't any
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Live logs** for any pod, right in the browser
 - **Simple auth**: password from a Kubernetes Secret, signed tokens (failover-friendly)

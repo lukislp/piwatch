@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/lukislp/piwatch/compare/v1.5.0...v1.5.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* live-update the full NVMe/hardware payload, not just a whitelist ([38e27cb](https://github.com/lukislp/piwatch/commit/38e27cbda03d2677161b0ee2e406800f6919d0be))
+
 # [1.5.0](https://github.com/lukislp/piwatch/compare/v1.4.1...v1.5.0) (2026-08-15)
 
 

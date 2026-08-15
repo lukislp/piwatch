@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/lukislp/piwatch/compare/v1.4.1...v1.5.0) (2026-08-15)
+
+
+### Features
+
+* add a dedicated NVMe monitoring tab ([943c8be](https://github.com/lukislp/piwatch/commit/943c8be1c83b91790562d0346ec7a7ae96733a7a))
+
 ## [1.4.1](https://github.com/lukislp/piwatch/compare/v1.4.0...v1.4.1) (2026-08-15)
 
 

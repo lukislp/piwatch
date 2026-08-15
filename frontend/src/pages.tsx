@@ -258,14 +258,22 @@ export function Nvme({ snap, mode }: { snap: Snapshot; mode: Mode }) {
 
 // ---------------- Workloads ----------------
 // Best-effort: PiWatch doesn't watch ReplicaSets/ownerReferences, so pod-to-Deployment
-// ownership is inferred from the standard Deployment->ReplicaSet->Pod naming convention
-// (pod name starts with "<deployment-name>-"). Good enough to flag a rollout, not a
-// guarantee for unusually-named workloads.
+// ownership is inferred from the standard Deployment->ReplicaSet->Pod naming convention:
+// "<deployment-name>-<template-hash>-<random-suffix>", i.e. exactly two more hyphen-
+// separated segments after the deployment-name prefix. A plain startsWith(dep.name + "-")
+// isn't enough -- it also matches OTHER deployments in the same namespace whose name
+// happens to start with this one's (e.g. "cert-manager" wrongly absorbing
+// "cert-manager-webhook-<hash>-<suffix>" and "cert-manager-cainjector-..." pods, which
+// run different images and used to trigger a false "rollout in progress").
 function rolloutDrift(dep: DeploymentInfo, pods: PodInfo[]): string | null {
   if (dep.updated < dep.replicas) {
     return `${dep.updated}/${dep.replicas} replicas updated to the current revision`;
   }
-  const owned = pods.filter((p) => p.namespace === dep.namespace && p.name.startsWith(`${dep.name}-`));
+  const prefix = `${dep.name}-`;
+  const owned = pods.filter((p) => {
+    if (p.namespace !== dep.namespace || !p.name.startsWith(prefix)) return false;
+    return p.name.slice(prefix.length).split("-").length === 2;
+  });
   const images = new Set(owned.flatMap((p) => p.images ?? []));
   if (images.size > 1) {
     return `replicas running different image tags: ${[...images].join(", ")}`;

@@ -47,9 +47,13 @@ class ClusterState:
         # Healthchecks: name -> {config, last, history: deque[{t, ok, ms}]}
         self.healthchecks: dict[str, dict[str, Any]] = {}
 
-        # Flux Kustomization sync status (ns/name -> mapped status dict). Optional --
-        # stays empty on clusters that don't run Flux; see collectors/flux.py.
+        # Flux GitOps status (all ns/name -> mapped status dict). All optional -- stay
+        # empty on clusters that don't run Flux, or don't use image automation; see
+        # collectors/flux.py.
         self.flux_kustomizations: dict[str, dict[str, Any]] = {}
+        self.flux_git_repositories: dict[str, dict[str, Any]] = {}
+        self.flux_image_policies: dict[str, dict[str, Any]] = {}
+        self.flux_image_automations: dict[str, dict[str, Any]] = {}
 
         self._subscribers: set[asyncio.Queue] = set()
 
@@ -149,6 +153,18 @@ class ClusterState:
         self.flux_kustomizations = items
         self.publish("flux_kustomizations", items)
 
+    def set_flux_git_repositories(self, items: dict[str, dict]) -> None:
+        self.flux_git_repositories = items
+        self.publish("flux_git_repositories", items)
+
+    def set_flux_image_policies(self, items: dict[str, dict]) -> None:
+        self.flux_image_policies = items
+        self.publish("flux_image_policies", items)
+
+    def set_flux_image_automations(self, items: dict[str, dict]) -> None:
+        self.flux_image_automations = items
+        self.publish("flux_image_automations", items)
+
     def record_check(self, name: str, config: dict, ok: bool, latency_ms: float | None, detail: str = "") -> None:
         entry = self.healthchecks.setdefault(
             name, {"config": config, "history": deque(maxlen=CHECK_HISTORY_LEN)}
@@ -177,6 +193,9 @@ class ClusterState:
             "hardware": self.hardware,
             "pod_metrics": self.pod_metrics,
             "flux_kustomizations": self.flux_kustomizations,
+            "flux_git_repositories": self.flux_git_repositories,
+            "flux_image_policies": self.flux_image_policies,
+            "flux_image_automations": self.flux_image_automations,
             "node_history": {k: list(v) for k, v in self.node_history.items()},
             "healthchecks": {
                 name: {

@@ -713,6 +713,153 @@ def test_map_kustomization_next_reconcile_none_without_interval():
     assert d["next_reconcile_t"] is None
 
 
+def test_map_kustomization_extracts_resource_count_source_and_apply_pending():
+    from app.collectors.flux import _map_kustomization
+
+    obj = _kustomization_obj()
+    obj["spec"]["sourceRef"] = {"kind": "GitRepository", "name": "piwatch"}
+    obj["status"]["inventory"] = {
+        "entries": [{"id": "monitoring_piwatch_apps_Deployment", "v": "v1"}, {"id": "monitoring_piwatch__Service", "v": "v1"}]
+    }
+    d = _map_kustomization(obj)
+    assert d["managed_resource_count"] == 2
+    assert d["source_kind"] == "GitRepository"
+    assert d["source_name"] == "piwatch"
+    assert d["source_namespace"] == "flux-system"  # falls back to the Kustomization's own namespace
+    assert d["apply_pending"] is False  # lastAttemptedRevision unset -> nothing to compare
+
+
+def test_map_kustomization_apply_pending_when_attempted_differs_from_applied():
+    """A stuck/in-flight apply: the last attempt hasn't (yet, or ever) matched
+    what's actually applied -- the Ready condition alone wouldn't catch this
+    if it's still reporting the last successful state."""
+    from app.collectors.flux import _map_kustomization
+
+    obj = _kustomization_obj(revision="main@sha1:old111")
+    obj["status"]["lastAttemptedRevision"] = "main@sha1:new222"
+    d = _map_kustomization(obj)
+    assert d["apply_pending"] is True
+
+
+def test_map_kustomization_no_inventory_defaults_resource_count_to_zero():
+    from app.collectors.flux import _map_kustomization
+
+    d = _map_kustomization(_kustomization_obj())
+    assert d["managed_resource_count"] == 0
+    assert d["source_kind"] is None
+
+
+def _git_repository_obj(name="piwatch", namespace="flux-system", ready=True, revision="main@sha1:abc123"):
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {"url": "https://github.com/lukislp/piwatch.git", "ref": {"branch": "master"}},
+        "status": {
+            "artifact": {"revision": revision, "lastUpdateTime": "2026-01-01T00:00:00Z"},
+            "conditions": [
+                {
+                    "type": "Ready",
+                    "status": "True" if ready else "False",
+                    "reason": "Succeeded" if ready else "Failed",
+                    "message": f"stored artifact for revision '{revision}'" if ready else "auth failed",
+                }
+            ],
+        },
+    }
+
+
+def test_map_git_repository_extracts_source_status():
+    from app.collectors.flux import _map_git_repository
+
+    d = _map_git_repository(_git_repository_obj())
+    assert d["key"] == "flux-system/piwatch"
+    assert d["ready"] is True
+    assert d["url"] == "https://github.com/lukislp/piwatch.git"
+    assert d["ref"] == "master"
+    assert d["revision"] == "main@sha1:abc123"
+
+
+def test_map_git_repository_not_ready_surfaces_reason():
+    from app.collectors.flux import _map_git_repository
+
+    d = _map_git_repository(_git_repository_obj(ready=False))
+    assert d["ready"] is False
+    assert d["reason"] == "Failed"
+    assert "auth failed" in d["message"]
+
+
+def _image_repository_obj(name="piwatch", namespace="flux-system", tag_count=18):
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "status": {"lastScanResult": {"tagCount": tag_count, "scanTime": "2026-01-01T00:00:00Z"}},
+    }
+
+
+def _image_policy_obj(
+    name="piwatch", namespace="flux-system", repo_name="piwatch", latest_tag="1.8.0", previous_tag="1.7.1",
+):
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {"imageRepositoryRef": {"name": repo_name}},
+        "status": {
+            "conditions": [{"type": "Ready", "status": "True", "reason": "Succeeded", "message": "resolved"}],
+            "latestRef": {"name": f"ghcr.io/lukislp/{repo_name}", "tag": latest_tag},
+            "observedPreviousRef": {"name": f"ghcr.io/lukislp/{repo_name}", "tag": previous_tag},
+        },
+    }
+
+
+def test_map_image_policy_joins_scan_result_by_repo_ref():
+    from app.collectors.flux import _map_image_policy
+
+    scan_by_repo = {"flux-system/piwatch": {"tag_count": 18, "scan_time": "2026-01-01T00:00:00Z"}}
+    d = _map_image_policy(_image_policy_obj(), scan_by_repo)
+    assert d["image"] == "ghcr.io/lukislp/piwatch"
+    assert d["latest_tag"] == "1.8.0"
+    assert d["previous_tag"] == "1.7.1"
+    assert d["tag_count"] == 18
+    assert d["last_scan_time"] == "2026-01-01T00:00:00Z"
+
+
+def test_map_image_policy_degrades_gracefully_without_matching_scan():
+    """The ImageRepository poll can fail independently (see
+    test_flux_run_all_resource_kinds_degrade_independently) -- ImagePolicy
+    mapping must still work with an empty scan_by_repo, just without scan info."""
+    from app.collectors.flux import _map_image_policy
+
+    d = _map_image_policy(_image_policy_obj(), {})
+    assert d["latest_tag"] == "1.8.0"
+    assert d["tag_count"] is None
+    assert d["last_scan_time"] is None
+
+
+def _image_update_automation_obj(name="piwatch", namespace="flux-system", ready=True):
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "status": {
+            "conditions": [
+                {
+                    "type": "Ready",
+                    "status": "True" if ready else "False",
+                    "reason": "Succeeded" if ready else "Failed",
+                    "message": "repository up-to-date",
+                }
+            ],
+            "lastAutomationRunTime": "2026-01-01T00:00:00Z",
+            "lastPushCommit": "abc123def456",
+            "lastPushTime": "2026-01-01T00:00:00Z",
+        },
+    }
+
+
+def test_map_image_update_automation_extracts_push_status():
+    from app.collectors.flux import _map_image_update_automation
+
+    d = _map_image_update_automation(_image_update_automation_obj())
+    assert d["ready"] is True
+    assert d["last_push_commit"] == "abc123def456"
+    assert d["last_automation_run_time"] == "2026-01-01T00:00:00Z"
+
+
 @pytest.mark.parametrize(
     "value,expected",
     [
@@ -771,16 +918,20 @@ def test_flux_run_polls_and_publishes_kustomizations(monkeypatch):
     assert sleep_calls == [flux.POLL_INTERVAL]
 
 
-def test_flux_run_degrades_quietly_when_crd_is_missing(monkeypatch):
+def test_flux_run_all_resource_kinds_degrade_independently_and_keep_polling(monkeypatch):
     """Flux is optional -- a missing CRD (or missing RBAC for it) must not
-    crash the app, just back off and keep polling."""
+    crash the app. Each of the 5 resource kinds is polled in its own
+    try/except, so even when ALL of them fail (e.g. no Flux installed at
+    all), the loop still just does its normal POLL_INTERVAL cadence --
+    the harsher RETRY_INTERVAL backoff is reserved for a structural failure
+    outside any single resource kind (see the next test)."""
     from kubernetes_asyncio import client as kclient
 
     from app.collectors import flux
     from app.state import ClusterState
 
     st = ClusterState()
-    fake_api = _FakeCustomObjectsApi(error=RuntimeError("404 Not Found: kustomizations"))
+    fake_api = _FakeCustomObjectsApi(error=RuntimeError("404 Not Found"))
     monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
     monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
 
@@ -796,7 +947,80 @@ def test_flux_run_degrades_quietly_when_crd_is_missing(monkeypatch):
         asyncio.run(flux.run(st))
 
     assert st.flux_kustomizations == {}
-    assert sleep_calls == [30]
+    assert st.flux_git_repositories == {}
+    assert st.flux_image_policies == {}
+    assert st.flux_image_automations == {}
+    assert sleep_calls == [flux.POLL_INTERVAL]
+
+
+def test_flux_run_backs_off_on_structural_failure(monkeypatch):
+    """A failure outside any single resource kind's try/except (e.g. the
+    ApiClient itself can't be constructed) hits the outer handler and backs
+    off harder than a per-kind 404 would."""
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import flux
+    from app.state import ClusterState
+
+    class _BrokenApiClient:
+        async def __aenter__(self):
+            raise RuntimeError("connection refused")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    st = ClusterState()
+    monkeypatch.setattr(kclient, "ApiClient", _BrokenApiClient)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(flux.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(flux.run(st))
+
+    assert sleep_calls == [flux.RETRY_INTERVAL]
+
+
+def test_flux_run_polls_and_publishes_all_resource_kinds(monkeypatch):
+    from kubernetes_asyncio import client as kclient
+
+    from app.collectors import flux
+    from app.state import ClusterState
+
+    st = ClusterState()
+    fake_api = _FakeCustomObjectsApi(
+        {
+            "kustomizations": [_kustomization_obj()],
+            "gitrepositories": [_git_repository_obj()],
+            "imagerepositories": [_image_repository_obj()],
+            "imagepolicies": [_image_policy_obj()],
+            "imageupdateautomations": [_image_update_automation_obj()],
+        }
+    )
+    monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
+    monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
+
+    sleep_calls = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(flux.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(flux.run(st))
+
+    assert st.flux_kustomizations["flux-system/piwatch-deploy"]["ready"] is True
+    assert st.flux_git_repositories["flux-system/piwatch"]["ready"] is True
+    # the ImagePolicy's scan_by_repo join picked up the ImageRepository polled in the same cycle
+    assert st.flux_image_policies["flux-system/piwatch"]["tag_count"] == 18
+    assert st.flux_image_automations["flux-system/piwatch"]["last_push_commit"] == "abc123def456"
 
 
 # ==================================================================

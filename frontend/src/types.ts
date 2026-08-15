@@ -128,6 +128,49 @@ export interface FluxKustomization {
   /** Unix seconds. Derived server-side (last reconcile + spec.interval); null if
    * either input is missing (e.g. the resource was just created). */
   next_reconcile_t?: number | null;
+  managed_resource_count?: number;
+  /** True while an apply attempt is in flight or stuck failing after a prior success. */
+  apply_pending?: boolean;
+  source_kind?: string | null;
+  source_name?: string | null;
+  source_namespace?: string | null;
+}
+
+export interface FluxGitRepository {
+  key: string;
+  name: string;
+  namespace: string;
+  ready: boolean;
+  reason?: string | null;
+  message?: string | null;
+  url?: string | null;
+  ref?: string | null;
+  revision?: string | null;
+  last_update_time?: string | null;
+}
+
+export interface FluxImagePolicy {
+  key: string;
+  name: string;
+  namespace: string;
+  ready: boolean;
+  image?: string | null;
+  latest_tag?: string | null;
+  previous_tag?: string | null;
+  tag_count?: number | null;
+  last_scan_time?: string | null;
+}
+
+export interface FluxImageAutomation {
+  key: string;
+  name: string;
+  namespace: string;
+  ready: boolean;
+  reason?: string | null;
+  message?: string | null;
+  last_automation_run_time?: string | null;
+  last_push_commit?: string | null;
+  last_push_time?: string | null;
 }
 
 export interface HealthcheckEntry {
@@ -150,6 +193,9 @@ export interface Snapshot {
   node_history: Record<string, HistoryPoint[]>;
   healthchecks: Record<string, HealthcheckEntry>;
   flux_kustomizations: Record<string, FluxKustomization>;
+  flux_git_repositories: Record<string, FluxGitRepository>;
+  flux_image_policies: Record<string, FluxImagePolicy>;
+  flux_image_automations: Record<string, FluxImageAutomation>;
 }
 
 export type ConnStatus = "connecting" | "open" | "closed" | "unauthorized";

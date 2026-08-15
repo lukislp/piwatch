@@ -22,10 +22,17 @@ rules:
   - apiGroups: [metrics.k8s.io]
     resources: [nodes, pods]
     verbs: [get, list]
-  # Optional: only used if Flux is installed (see backend/app/collectors/flux.py). Harmless
-  # if the CRD doesn't exist -- RBAC rules for a nonexistent resource type never match anything.
+  # Optional: only used if Flux (and its image-automation controllers) is installed (see
+  # backend/app/collectors/flux.py). Harmless if a CRD doesn't exist -- an RBAC rule for a
+  # nonexistent resource type never matches anything.
   - apiGroups: [kustomize.toolkit.fluxcd.io]
     resources: [kustomizations]
+    verbs: [get, list]
+  - apiGroups: [source.toolkit.fluxcd.io]
+    resources: [gitrepositories]
+    verbs: [get, list]
+  - apiGroups: [image.toolkit.fluxcd.io]
+    resources: [imagerepositories, imagepolicies, imageupdateautomations]
     verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -1,3 +1,10 @@
+# [1.29.0](https://github.com/lukislp/piwatch/compare/v1.28.0...v1.29.0) (2026-08-16)
+
+
+### Features
+
+* add per-namespace summary card to the Workloads page ([7cfc3ea](https://github.com/lukislp/piwatch/commit/7cfc3ea9f386bd5c3d52bfc273bc2fdf92f4f92c))
+
 # [1.28.0](https://github.com/lukislp/piwatch/compare/v1.27.0...v1.28.0) (2026-08-16)
 
 

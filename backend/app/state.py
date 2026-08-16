@@ -78,6 +78,7 @@ class ClusterState:
         # clusters that don't use the Gateway API; see collectors/gateway.py.
         self.gateways: dict[str, dict[str, Any]] = {}
         self.http_routes: dict[str, dict[str, Any]] = {}
+        self.rate_limit_policies: dict[str, dict[str, Any]] = {}
 
         self._subscribers: set[asyncio.Queue] = set()
 
@@ -239,6 +240,10 @@ class ClusterState:
         self.http_routes = items
         self.publish("http_routes", items)
 
+    def set_rate_limit_policies(self, items: dict[str, dict]) -> None:
+        self.rate_limit_policies = items
+        self.publish("rate_limit_policies", items)
+
     def record_check(self, name: str, config: dict, ok: bool, latency_ms: float | None, detail: str = "") -> None:
         entry = self.healthchecks.setdefault(
             name, {"config": config, "history": deque(maxlen=CHECK_HISTORY_LEN)}
@@ -292,6 +297,7 @@ class ClusterState:
             "pvcs": self.pvcs,
             "gateways": self.gateways,
             "http_routes": self.http_routes,
+            "rate_limit_policies": self.rate_limit_policies,
             "node_history": {k: list(v) for k, v in self.node_history.items()},
             "healthchecks": {
                 name: {

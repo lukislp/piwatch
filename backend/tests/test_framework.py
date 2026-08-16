@@ -1901,6 +1901,64 @@ def _http_route_obj(
     }
 
 
+def _ratelimitpolicy_obj(
+    name="piwatch-rate-limit", namespace="monitoring", accepted=True,
+    target_name="piwatch", rate="20r/s", burst=200, with_ancestor_status=True,
+):
+    ancestors = []
+    if with_ancestor_status:
+        ancestors.append(
+            {
+                "ancestorRef": {"kind": "HTTPRoute", "name": target_name, "namespace": namespace},
+                "conditions": [
+                    {
+                        "type": "Accepted",
+                        "status": "True" if accepted else "False",
+                        "reason": "Accepted" if accepted else "Invalid",
+                        "message": "The Policy is accepted" if accepted else "bad target",
+                    }
+                ],
+            }
+        )
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {
+            "targetRefs": [{"group": "gateway.networking.k8s.io", "kind": "HTTPRoute", "name": target_name}],
+            "rateLimit": {
+                "local": {"rules": [{"rate": rate, "burst": burst, "zoneSize": "10m"}]},
+                "rejectCode": 503,
+            },
+        },
+        "status": {"ancestors": ancestors},
+    }
+
+
+def test_map_rate_limit_policy_accepted_and_extracts_targets_rules():
+    from app.collectors.gateway import _map_rate_limit_policy
+
+    d = _map_rate_limit_policy(_ratelimitpolicy_obj())
+    assert d["key"] == "monitoring/piwatch-rate-limit"
+    assert d["targets"] == ["HTTPRoute/piwatch"]
+    assert d["rules"] == ["20r/s (burst 200)"]
+    assert d["reject_code"] == 503
+    assert d["accepted"] is True
+
+
+def test_map_rate_limit_policy_not_accepted_surfaces_reason():
+    from app.collectors.gateway import _map_rate_limit_policy
+
+    d = _map_rate_limit_policy(_ratelimitpolicy_obj(accepted=False))
+    assert d["accepted"] is False
+    assert d["reason"] == "Invalid"
+
+
+def test_map_rate_limit_policy_no_ancestor_status_defaults_to_not_accepted():
+    from app.collectors.gateway import _map_rate_limit_policy
+
+    d = _map_rate_limit_policy(_ratelimitpolicy_obj(with_ancestor_status=False))
+    assert d["accepted"] is False
+
+
 def test_map_gateway_extracts_status_addresses_and_listener_counts():
     from app.collectors.gateway import _map_gateway
 
@@ -1999,7 +2057,7 @@ def test_map_http_route_no_parent_status_defaults_to_not_accepted():
     assert d["accepted"] is False
 
 
-def test_gateway_run_polls_and_publishes_both_kinds(monkeypatch):
+def test_gateway_run_polls_and_publishes_all_three_kinds(monkeypatch):
     from kubernetes_asyncio import client as kclient
 
     from app.collectors import gateway
@@ -2007,7 +2065,11 @@ def test_gateway_run_polls_and_publishes_both_kinds(monkeypatch):
 
     st = ClusterState()
     fake_api = _FakeCustomObjectsApi(
-        {"gateways": [_gateway_obj()], "httproutes": [_http_route_obj()]}
+        {
+            "gateways": [_gateway_obj()],
+            "httproutes": [_http_route_obj()],
+            "ratelimitpolicies": [_ratelimitpolicy_obj()],
+        }
     )
     monkeypatch.setattr(kclient, "ApiClient", _FakeApiClient)
     monkeypatch.setattr(kclient, "CustomObjectsApi", lambda api_client: fake_api)
@@ -2025,12 +2087,14 @@ def test_gateway_run_polls_and_publishes_both_kinds(monkeypatch):
 
     assert st.gateways["default/gw1"]["ready"] is True
     assert st.http_routes["default/route1"]["accepted"] is True
+    assert st.rate_limit_policies["monitoring/piwatch-rate-limit"]["accepted"] is True
     assert sleep_calls == [gateway.POLL_INTERVAL]
 
 
-def test_gateway_run_both_kinds_degrade_independently_and_keep_polling(monkeypatch):
-    """Gateway API is optional -- a missing CRD (or missing RBAC) must not
-    crash the app, just back off at the normal POLL_INTERVAL cadence."""
+def test_gateway_run_all_kinds_degrade_independently_and_keep_polling(monkeypatch):
+    """Gateway API (and its NGINX-specific RateLimitPolicy extension) is optional -- a
+    missing CRD (or missing RBAC) must not crash the app, just back off at the normal
+    POLL_INTERVAL cadence."""
     from kubernetes_asyncio import client as kclient
 
     from app.collectors import gateway
@@ -2054,6 +2118,7 @@ def test_gateway_run_both_kinds_degrade_independently_and_keep_polling(monkeypat
 
     assert st.gateways == {}
     assert st.http_routes == {}
+    assert st.rate_limit_policies == {}
     assert sleep_calls == [gateway.POLL_INTERVAL]
 
 

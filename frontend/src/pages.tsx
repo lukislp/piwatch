@@ -186,6 +186,7 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       <GitOpsStatus snap={snap} />
       <ImageAutomationStatus snap={snap} />
       <GatewayStatus snap={snap} />
+      <RateLimitPolicies snap={snap} />
       <LoadBalancerStatus snap={snap} />
       <NetworkPolicies snap={snap} />
     </>
@@ -476,6 +477,46 @@ function GatewayStatus({ snap }: { snap: Snapshot }) {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// ---------------- Rate Limit Policies ----------------
+// Hidden entirely when empty, same reasoning as GatewayStatus: RateLimitPolicy is an
+// NGINX Gateway Fabric extension, not part of the standard Gateway API.
+function RateLimitPolicies({ snap }: { snap: Snapshot }) {
+  const policies = Object.values(snap.rate_limit_policies).sort((a, b) => a.key.localeCompare(b.key));
+  if (policies.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Rate Limit Policies</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Namespace</th>
+            <th>Target</th>
+            <th>Limits</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {policies.map((p) => (
+            <tr key={p.key}>
+              <td>{p.name}</td>
+              <td className="muted">{p.namespace}</td>
+              <td className="mono muted">{p.targets.join(", ") || "–"}</td>
+              <td className="mono muted">{p.rules.join(", ") || "–"}</td>
+              <td>
+                <Dot color={p.accepted ? STATUS.good : STATUS.critical} />
+                {p.accepted ? "OK" : (
+                  <span title={p.message ?? undefined}>{p.reason ?? "⚠ not accepted"}</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

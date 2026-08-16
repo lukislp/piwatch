@@ -3136,6 +3136,48 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
     assert len(started) == 9  # k8s_watch, metrics, hardware, flux, pvc, gateway, autochecks, history, dns_check
 
 
+def test_export_healthchecks_endpoint_returns_csv_attachment(monkeypatch, tmp_path):
+    nostatic = tmp_path / "nostatic"
+    main_mod = _reload_main(
+        monkeypatch, PIWATCH_DEMO="1", PIWATCH_STATIC_DIR=str(nostatic), PIWATCH_PASSWORD=None
+    )
+    from fastapi.testclient import TestClient
+
+    main_mod.state.record_check("svc", {"name": "svc", "type": "http", "url": "http://x"}, True, 5.0)
+    with TestClient(main_mod.app) as client:
+        r = client.get("/api/healthchecks/export")
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/csv")
+        assert "attachment" in r.headers["content-disposition"]
+        assert "piwatch-healthchecks-" in r.headers["content-disposition"]
+        assert "svc,http,http://x" in r.text
+
+
+def test_export_healthchecks_endpoint_requires_auth(monkeypatch, tmp_path):
+    nostatic = tmp_path / "nostatic"
+    main_mod = _reload_main(
+        monkeypatch, PIWATCH_DEMO="1", PIWATCH_STATIC_DIR=str(nostatic), PIWATCH_PASSWORD="secret123",
+    )
+    # _reload_main only reloads app.main -- main.py does `from . import auth`, a reference
+    # to the module object, so auth's own module-level _PASSWORD (read once at import time)
+    # doesn't pick up the env var change until app.auth itself is reloaded too. reload()
+    # mutates that module object in place, so main_mod.auth (the same object) sees it too.
+    importlib.reload(main_mod.auth)
+    from fastapi.testclient import TestClient
+
+    try:
+        with TestClient(main_mod.app) as client:
+            r = client.get("/api/healthchecks/export")
+            assert r.status_code == 401
+    finally:
+        # app.auth is a process-wide module; monkeypatch reverts the env var automatically,
+        # but a module reload's effects don't unwind on their own -- undo it explicitly so
+        # a later test relying on auth being disabled by default doesn't inherit this
+        # test's password.
+        monkeypatch.delenv("PIWATCH_PASSWORD", raising=False)
+        importlib.reload(main_mod.auth)
+
+
 def test_get_state_endpoint_returns_snapshot(monkeypatch, tmp_path):
     nostatic = tmp_path / "nostatic"
     main_mod = _reload_main(

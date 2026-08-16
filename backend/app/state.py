@@ -7,8 +7,11 @@ simply reconnects to the surviving replica and receives its full state.
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import time
 from collections import deque
+from datetime import datetime, timezone
 from typing import Any
 
 # ~3h of history at one sample every 10s
@@ -27,6 +30,10 @@ NODE_HISTORY_FIELDS = (
 
 def now() -> float:
     return time.time()
+
+
+def _iso(t: float) -> str:
+    return datetime.fromtimestamp(t, tz=timezone.utc).isoformat()
 
 
 class ClusterState:
@@ -269,6 +276,41 @@ class ClusterState:
         checks (a fixed list for the process lifetime, nothing ever removes those)."""
         if self.healthchecks.pop(name, None) is not None:
             self.publish("healthcheck_deleted", {"name": name})
+
+    def healthchecks_report_csv(self) -> str:
+        """CSV summary of every healthcheck: uptime %, sample counts, first/last seen,
+        latest result. Built here rather than in main.py's route handler so it's testable
+        without spinning up the FastAPI app. Covers whatever history is currently held in
+        memory (bounded to CHECK_HISTORY_LEN samples per check, or less for a check that's
+        only just started) -- not a fixed calendar window."""
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow([
+            "name", "type", "target", "uptime_pct", "samples", "up", "down",
+            "first_seen", "last_seen", "last_ok", "last_detail",
+        ])
+        for name, entry in sorted(self.healthchecks.items()):
+            history = list(entry.get("history") or [])
+            config = entry.get("config") or {}
+            target = config.get("url") or (
+                f"{config.get('host')}:{config.get('port')}" if config.get("host") else ""
+            )
+            up = sum(1 for r in history if r.get("ok"))
+            last = entry.get("last") or {}
+            writer.writerow([
+                name,
+                config.get("type", ""),
+                target,
+                entry.get("uptime_pct", ""),
+                len(history),
+                up,
+                len(history) - up,
+                _iso(history[0]["t"]) if history else "",
+                _iso(history[-1]["t"]) if history else "",
+                last.get("ok", ""),
+                last.get("detail", ""),
+            ])
+        return buf.getvalue()
 
     # ---------------- snapshot ----------------
 

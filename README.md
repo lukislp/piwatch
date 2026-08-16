@@ -100,6 +100,10 @@ cluster involved.
   cluster DNS being broken or slow. Needs no RBAC and no configuration; shows up on the
   Checks page like any other check
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
+- **Healthcheck CSV export**: an "Export CSV" button on the Checks page downloads a summary
+  (uptime %, sample counts, first/last seen, latest result) of every check for an ad-hoc
+  SLA report -- covers whatever history is currently held in memory, not a fixed calendar
+  window
 - **Auto-discovered healthchecks** (optional, set `PIWATCH_AUTO_HEALTHCHECKS=1`): a check for
   every accepted HTTPRoute (HTTP(S) request straight to its Gateway's Service ClusterIP, with
   the correct TLS SNI/`Host` header for that hostname -- never the public hostname, which usually

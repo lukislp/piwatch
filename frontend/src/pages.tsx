@@ -1065,6 +1065,65 @@ function OrphanedPvs({ snap }: { snap: Snapshot }) {
   );
 }
 
+// A Secret/ConfigMap sitting around for a very long time without being touched is the
+// common case, not a problem by itself -- but for Secrets specifically it's worth a
+// glance, since "when did this credential last rotate" is otherwise invisible without
+// `kubectl get secret -o yaml` per one. A year is a conservative default: long enough
+// that most legitimately-static config won't trip it, short enough to catch genuinely
+// stale credentials.
+const SECRET_AGE_WARN_S = 365 * 86400;
+
+// Hidden entirely when empty, same reasoning as Storage: not every cluster's worth of
+// Secrets/ConfigMaps needs surfacing on its own card. Only metadata ever reaches the
+// frontend -- see collectors/k8s_watch.py's map_secret -- so there's nothing here that
+// could leak a credential value.
+function SecretsAndConfigMaps({ snap }: { snap: Snapshot }) {
+  const rows = [
+    ...Object.values(snap.secrets).map((s) => ({ kind: "Secret" as const, ...s })),
+    ...Object.values(snap.configmaps).map((c) => ({ kind: "ConfigMap" as const, ...c })),
+  ].sort((a, b) => (a.created ?? 0) - (b.created ?? 0));
+  if (rows.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Secrets &amp; ConfigMaps</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Namespace</th>
+            <th>Kind</th>
+            <th>Type</th>
+            <th className="num">Keys</th>
+            <th className="num">Age</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const old = r.created != null && Date.now() / 1000 - r.created > SECRET_AGE_WARN_S;
+            return (
+              <tr key={`${r.kind}/${r.key}`}>
+                <td>{r.name}</td>
+                <td className="muted">{r.namespace}</td>
+                <td className="muted">{r.kind}</td>
+                <td className="mono muted">{r.kind === "Secret" ? r.type : "–"}</td>
+                <td className="num muted">{r.key_count}</td>
+                <td
+                  className="num"
+                  style={old ? { color: STATUS.warning } : undefined}
+                  title={old ? "Older than a year -- consider rotating" : undefined}
+                >
+                  {fmtAge(r.created ?? undefined)}
+                  {old && " ⚠"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // Hidden entirely when empty, same reasoning as Storage/GitOpsStatus: not every cluster
 // runs StatefulSets (they're common for stateful apps like databases/caches, but far from
 // universal in a small homelab-style deployment).
@@ -1273,6 +1332,7 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       </div>
       <Storage snap={snap} />
       <OrphanedPvs snap={snap} />
+      <SecretsAndConfigMaps snap={snap} />
     </>
   );
 }

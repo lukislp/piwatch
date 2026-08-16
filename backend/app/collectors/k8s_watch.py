@@ -15,6 +15,16 @@ from ..state import ClusterState
 
 log = logging.getLogger("piwatch.k8s")
 
+# Auto-managed Secret types that exist in every cluster and never need a "when did this
+# last rotate" glance -- filtering them out keeps the Secrets card focused on ones a
+# human actually manages. ServiceAccount tokens are one per ServiceAccount (piwatch's own
+# included) and rotate on kubelet's own schedule; Helm release storage isn't a credential
+# at all, just Helm's internal bookkeeping.
+_NOISY_SECRET_TYPES = {"kubernetes.io/service-account-token", "helm.sh/release.v1"}
+# Auto-created by the API server in every namespace, holding the cluster's own CA bundle
+# -- not something anyone rotates by hand, so it'd just be permanent clutter.
+_NOISY_CONFIGMAP_NAMES = {"kube-root-ca.crt"}
+
 
 async def load_config():
     from kubernetes_asyncio import config
@@ -260,6 +270,33 @@ def map_network_policy(np) -> dict:
     }
 
 
+def map_secret(s) -> dict:
+    """Only metadata (name/type/key count/age) is ever read -- .data (the base64-encoded
+    secret values themselves) is never touched, so no secret contents pass through
+    piwatch. key_count exists so the UI can show "this Secret has N keys" without
+    knowing what any of them are."""
+    return {
+        "key": f"{s.metadata.namespace}/{s.metadata.name}",
+        "name": s.metadata.name,
+        "namespace": s.metadata.namespace,
+        "type": s.type,
+        "key_count": len(s.data or {}),
+        "immutable": bool(s.immutable),
+        "created": s.metadata.creation_timestamp.timestamp() if s.metadata.creation_timestamp else None,
+    }
+
+
+def map_configmap(cm) -> dict:
+    return {
+        "key": f"{cm.metadata.namespace}/{cm.metadata.name}",
+        "name": cm.metadata.name,
+        "namespace": cm.metadata.namespace,
+        "key_count": len(cm.data or {}) + len(cm.binary_data or {}),
+        "immutable": bool(cm.immutable),
+        "created": cm.metadata.creation_timestamp.timestamp() if cm.metadata.creation_timestamp else None,
+    }
+
+
 def map_event(e) -> dict:
     ts = e.last_timestamp or e.event_time or e.metadata.creation_timestamp
     return {
@@ -305,6 +342,10 @@ async def _watch_loop(state: ClusterState, kind: str):
                     lister, mapper = autoscaling.list_horizontal_pod_autoscaler_for_all_namespaces, map_hpa
                 elif kind == "networkpolicies":
                     lister, mapper = networking.list_network_policy_for_all_namespaces, map_network_policy
+                elif kind == "secrets":
+                    lister, mapper = v1.list_secret_for_all_namespaces, map_secret
+                elif kind == "configmaps":
+                    lister, mapper = v1.list_config_map_for_all_namespaces, map_configmap
                 elif kind == "persistentvolumes":
                     lister, mapper = v1.list_persistent_volume, map_pv
                 elif kind == "events":
@@ -357,6 +398,16 @@ def _apply(state: ClusterState, kind: str, ev_type: str, obj: dict) -> None:
         state.remove_hpa(obj["key"]) if deleted else state.upsert_hpa(obj["key"], obj)
     elif kind == "networkpolicies":
         state.remove_network_policy(obj["key"]) if deleted else state.upsert_network_policy(obj["key"], obj)
+    elif kind == "secrets":
+        if deleted or obj["type"] in _NOISY_SECRET_TYPES:
+            state.remove_secret(obj["key"])
+        else:
+            state.upsert_secret(obj["key"], obj)
+    elif kind == "configmaps":
+        if deleted or obj["name"] in _NOISY_CONFIGMAP_NAMES:
+            state.remove_configmap(obj["key"])
+        else:
+            state.upsert_configmap(obj["key"], obj)
     elif kind == "persistentvolumes":
         # Only "Released"/"Failed" PVs are orphaned/need-attention -- a PV that gets
         # rebound (rare, but possible) must be actively removed, not left stale, since
@@ -381,6 +432,8 @@ async def run(state: ClusterState):
         _watch_loop(state, "services"),
         _watch_loop(state, "hpas"),
         _watch_loop(state, "networkpolicies"),
+        _watch_loop(state, "secrets"),
+        _watch_loop(state, "configmaps"),
         _watch_loop(state, "persistentvolumes"),
         _watch_loop(state, "events"),
     )

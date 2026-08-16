@@ -59,9 +59,24 @@ def _node_obj(name="pi-1", role_label=True, with_optional=True, unschedulable=Fa
     return types.SimpleNamespace(status=status, metadata=metadata, spec=spec)
 
 
+def _init_container_status_obj(name, waiting_reason=None, exit_code=None, terminated_reason=None):
+    """One entry of pod.status.init_container_statuses. exit_code=0 means completed
+    successfully; a non-zero exit_code or a waiting_reason means still blocking startup."""
+    state = types.SimpleNamespace(
+        waiting=types.SimpleNamespace(reason=waiting_reason) if waiting_reason else None,
+        terminated=(
+            types.SimpleNamespace(reason=terminated_reason, exit_code=exit_code)
+            if exit_code is not None
+            else None
+        ),
+    )
+    return types.SimpleNamespace(name=name, state=state)
+
+
 def _pod_obj(
     name="p1", namespace="default", waiting=False, no_statuses=False,
     oom=False, oom_in_last_state=False, terminated=None, last_terminated=None,
+    init_container_statuses=None,
 ):
     """terminated/last_terminated: optional (reason, exit_code) tuples for the
     container's current/last state, independent of the oom convenience flags
@@ -90,7 +105,8 @@ def _pod_obj(
         node_name="pi-1", containers=[types.SimpleNamespace(name="app", image="registry.local/app:v1")]
     )
     status = types.SimpleNamespace(
-        container_statuses=statuses, phase="Running", reason=None
+        container_statuses=statuses, phase="Running", reason=None,
+        init_container_statuses=init_container_statuses,
     )
     return types.SimpleNamespace(metadata=metadata, spec=spec, status=status)
 
@@ -276,6 +292,60 @@ def test_map_pod_no_container_statuses():
     assert d["restarts"] == 0
     assert d["reason"] is None
     assert d["oom_killed"] is False
+    assert d["init_progress"] is None
+    assert d["init_reason"] is None
+
+
+def test_map_pod_no_init_containers_leaves_init_fields_none():
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj())
+    assert d["init_progress"] is None
+    assert d["init_reason"] is None
+
+
+def test_map_pod_init_container_crash_loop_reports_progress_and_reason():
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(init_container_statuses=[
+        _init_container_status_obj("init-a", exit_code=0),
+        _init_container_status_obj("init-b", waiting_reason="CrashLoopBackOff"),
+    ]))
+    assert d["init_progress"] == "1/2"
+    assert d["init_reason"] == "CrashLoopBackOff"
+
+
+def test_map_pod_init_container_error_exit_reports_reason_with_code():
+    """No terminated.reason from the API -- falls back to a synthesized "Error (exit N)"."""
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(init_container_statuses=[
+        _init_container_status_obj("init-a", exit_code=1),
+    ]))
+    assert d["init_progress"] == "0/1"
+    assert d["init_reason"] == "Error (exit 1)"
+
+
+def test_map_pod_init_container_terminated_reason_preferred_over_fallback():
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(init_container_statuses=[
+        _init_container_status_obj("init-a", exit_code=137, terminated_reason="OOMKilled"),
+    ]))
+    assert d["init_reason"] == "OOMKilled"
+
+
+def test_map_pod_all_init_containers_completed_leaves_init_fields_none():
+    """Once every init container has exited 0, it's a non-issue -- matches kubectl's own
+    behavior of only showing "Init:..." while startup is still blocked."""
+    from app.collectors.k8s_watch import map_pod
+
+    d = map_pod(_pod_obj(init_container_statuses=[
+        _init_container_status_obj("init-a", exit_code=0),
+        _init_container_status_obj("init-b", exit_code=0),
+    ]))
+    assert d["init_progress"] is None
+    assert d["init_reason"] is None
 
 
 def test_map_pod_detects_oom_killed_in_current_state():

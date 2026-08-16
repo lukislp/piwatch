@@ -26,6 +26,9 @@ PODS = [
     ("home", "home-assistant-0", "pi-worker-1", "ghcr.io/home-assistant/home-assistant:2024.1"),
     ("home", "mosquitto-6b8d2", "pi-worker-2", "eclipse-mosquitto:2"),
     ("home", "node-red-59fd7", "pi-worker-2", "nodered/node-red:3"),
+    # stuck on a failing init container -- showcases the Workloads tab's init-container
+    # progress/reason indicator without needing a real broken rollout.
+    ("home", "zigbee2mqtt-0", "pi-worker-1", "koenkk/zigbee2mqtt:1.35.0"),
 ]
 
 # (namespace, name, storage class, requested bytes, access modes)
@@ -95,6 +98,7 @@ async def run(state: ClusterState):
 
     # --- seed pods & deployments ---
     for ns, pod, node, image in PODS:
+        stuck_init = pod == "zigbee2mqtt-0"
         state.upsert_pod(
             f"{ns}/{pod}",
             {
@@ -102,9 +106,9 @@ async def run(state: ClusterState):
                 "name": pod,
                 "namespace": ns,
                 "node": node,
-                "phase": "Running",
-                "reason": None,
-                "ready": "1/1",
+                "phase": "Pending" if stuck_init else "Running",
+                "reason": "PodInitializing" if stuck_init else None,
+                "ready": "0/0" if stuck_init else "1/1",
                 # node-red/coredns always show >=1 so their restart-reason tooltip
                 # showcase (see last_exit_reason below) isn't hidden by chance.
                 "restarts": rng.randint(1, 3) if pod in ("node-red-59fd7", "coredns-6799f") else rng.randint(0, 3),
@@ -117,6 +121,8 @@ async def run(state: ClusterState):
                 # above, coredns' was a plain crash -- two different reasons/exit codes.
                 "last_exit_reason": "OOMKilled" if pod == "node-red-59fd7" else ("Error" if pod == "coredns-6799f" else None),
                 "last_exit_code": 137 if pod == "node-red-59fd7" else (1 if pod == "coredns-6799f" else None),
+                "init_progress": "0/1" if stuck_init else None,
+                "init_reason": "CrashLoopBackOff" if stuck_init else None,
                 "created": time.time() - rng.randint(3600, 86400 * 7),
             },
         )

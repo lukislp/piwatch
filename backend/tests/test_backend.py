@@ -158,6 +158,57 @@ def test_remove_check_deletes_and_publishes_only_when_present():
     asyncio.run(scenario())
 
 
+def test_healthchecks_report_csv_summarizes_uptime_and_samples():
+    import csv
+    import io
+
+    from app.state import ClusterState
+
+    st = ClusterState()
+    cfg = {"name": "svc", "type": "http", "url": "http://x"}
+    for ok in [True, True, True, False]:
+        st.record_check("svc", cfg, ok, 10.0 if ok else None, "" if ok else "ConnectionRefusedError")
+
+    rows = list(csv.DictReader(io.StringIO(st.healthchecks_report_csv())))
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["name"] == "svc"
+    assert row["type"] == "http"
+    assert row["target"] == "http://x"
+    assert row["uptime_pct"] == "75.0"
+    assert row["samples"] == "4"
+    assert row["up"] == "3"
+    assert row["down"] == "1"
+    assert row["last_ok"] == "False"
+    assert row["last_detail"] == "ConnectionRefusedError"
+    assert row["first_seen"]  # non-empty ISO timestamp
+    assert row["last_seen"]
+
+
+def test_healthchecks_report_csv_empty_when_no_checks():
+    import csv
+    import io
+
+    from app.state import ClusterState
+
+    st = ClusterState()
+    rows = list(csv.DictReader(io.StringIO(st.healthchecks_report_csv())))
+    assert rows == []
+
+
+def test_healthchecks_report_csv_target_falls_back_to_host_port():
+    import csv
+    import io
+
+    from app.state import ClusterState
+
+    st = ClusterState()
+    st.record_check("mqtt", {"name": "mqtt", "type": "tcp", "host": "mosquitto", "port": 1883}, True, 3.0)
+
+    rows = list(csv.DictReader(io.StringIO(st.healthchecks_report_csv())))
+    assert rows[0]["target"] == "mosquitto:1883"
+
+
 # ---------------- kubernetes quantity parsers ----------------
 
 @pytest.mark.parametrize(

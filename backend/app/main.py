@@ -19,10 +19,11 @@ import asyncio
 import contextlib
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import auth, ws
@@ -104,6 +105,18 @@ app.include_router(ws.router)
 @app.get("/api/state", dependencies=[Depends(auth.require_auth)])
 def get_state():
     return JSONResponse(state.snapshot())
+
+
+@app.get("/api/healthchecks/export", dependencies=[Depends(auth.require_auth)])
+def export_healthchecks():
+    """CSV summary of every healthcheck's uptime/samples, for an ad-hoc SLA report --
+    see state.healthchecks_report_csv() for what's actually in it."""
+    filename = f"piwatch-healthchecks-{time.strftime('%Y%m%d-%H%M%S')}.csv"
+    return Response(
+        content=state.healthchecks_report_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/healthz")

@@ -1111,30 +1111,53 @@ export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
 }
 
 // ---------------- Healthchecks ----------------
+// Fetches the CSV report with the auth header a plain <a href> download link can't set,
+// then hands it to the browser as a Blob download -- no server-side session/cookie to
+// piggyback on, piwatch auth is a bearer token the frontend holds in localStorage.
+async function downloadHealthchecksCsv() {
+  const resp = await fetch("/api/healthchecks/export", {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!resp.ok) return;
+  const blob = await resp.blob();
+  const match = resp.headers.get("content-disposition")?.match(/filename="([^"]+)"/);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = match?.[1] ?? "piwatch-healthchecks.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function Healthchecks({ snap }: { snap: Snapshot }) {
   const checks = Object.entries(snap.healthchecks).sort(([a], [b]) => a.localeCompare(b));
   if (checks.length === 0) return <div className="card muted">No healthchecks configured (ConfigMap piwatch-healthchecks).</div>;
   return (
-    <div className="grid cards">
-      {checks.map(([name, c]) => (
-        <div className="card" key={name}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <strong>{name}</strong>
-            <StatusBadge ok={!!c.last?.ok} okText="Up" badText="Down" />
+    <>
+      <div className="row" style={{ marginBottom: 12, justifyContent: "flex-end" }}>
+        <button className="ghost" onClick={downloadHealthchecksCsv}>⬇ Export CSV</button>
+      </div>
+      <div className="grid cards">
+        {checks.map(([name, c]) => (
+          <div className="card" key={name}>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <strong>{name}</strong>
+              <StatusBadge ok={!!c.last?.ok} okText="Up" badText="Down" />
+            </div>
+            <div className="muted mono" style={{ marginTop: 4 }}>{c.config?.url ?? `${c.config?.host}:${c.config?.port}`}</div>
+            <div className="row" style={{ marginTop: 8, justifyContent: "space-between" }}>
+              <span className="muted">Uptime: <strong style={{ color: "var(--ink)" }}>{c.uptime_pct?.toFixed(1) ?? "–"} %</strong></span>
+              <span className="muted">Latency: {c.last?.ms != null ? `${c.last.ms} ms` : "–"}</span>
+            </div>
+            <div className="uptime-strip" title="History (oldest → newest check)">
+              {c.history.slice(-60).map((r, i) => (
+                <i key={i} style={{ background: r.ok ? STATUS.good : STATUS.critical, opacity: r.ok ? 0.75 : 1 }} />
+              ))}
+            </div>
           </div>
-          <div className="muted mono" style={{ marginTop: 4 }}>{c.config?.url ?? `${c.config?.host}:${c.config?.port}`}</div>
-          <div className="row" style={{ marginTop: 8, justifyContent: "space-between" }}>
-            <span className="muted">Uptime: <strong style={{ color: "var(--ink)" }}>{c.uptime_pct?.toFixed(1) ?? "–"} %</strong></span>
-            <span className="muted">Latency: {c.last?.ms != null ? `${c.last.ms} ms` : "–"}</span>
-          </div>
-          <div className="uptime-strip" title="History (oldest → newest check)">
-            {c.history.slice(-60).map((r, i) => (
-              <i key={i} style={{ background: r.ok ? STATUS.good : STATUS.critical, opacity: r.ok ? 0.75 : 1 }} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
 

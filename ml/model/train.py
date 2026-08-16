@@ -13,6 +13,17 @@ collected data). Running this now is a pipeline smoke-test -- proving the
 code is mechanically correct (it runs, loss is finite, checkpoints save/load)
 -- not a result worth reporting on its own. Re-run for real once there's
 substantially more history.
+
+Every run is logged to MLflow (params, per-epoch metrics, the checkpoint
+artifacts) -- a local SQLite-backed store by default (ml/mlruns/mlflow.db,
+gitignored), pointable at a real MLflow server later via --tracking-uri.
+SQLite, not the plain filesystem store: recent MLflow versions have put the
+filesystem backend into maintenance mode in favor of a database backend (see
+https://mlflow.org/docs/latest/self-hosting/migrate-from-file-store), so
+starting on SQLite avoids needing a migration later. The point isn't tracking
+for its own sake: once there have been several real runs (different window
+sizes, hidden sizes, etc.), MLflow's UI is what makes "which config actually
+won" answerable instead of scrolling through old terminal output.
 """
 from __future__ import annotations
 
@@ -24,6 +35,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import mlflow
 import numpy as np
 import pandas as pd
 import torch
@@ -72,34 +84,39 @@ def train_one_node(node: str, g: pd.DataFrame, cfg: TrainConfig, out_dir: Path) 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
 
     history = []
-    for epoch in range(cfg.epochs):
-        model.train()
-        train_losses = []
-        for batch in train_loader:
-            optimizer.zero_grad()
-            recon = model(batch)
-            loss = reconstruction_error(batch, recon).mean()
-            loss.backward()
-            optimizer.step()
-            train_losses.append(loss.item())
-
-        model.eval()
-        val_losses = []
-        with torch.no_grad():
-            for batch in val_loader:
+    with mlflow.start_run(run_name=node):
+        mlflow.log_params({**asdict(cfg), "node": node})
+        for epoch in range(cfg.epochs):
+            model.train()
+            train_losses = []
+            for batch in train_loader:
+                optimizer.zero_grad()
                 recon = model(batch)
-                val_losses.append(reconstruction_error(batch, recon).mean().item())
+                loss = reconstruction_error(batch, recon).mean()
+                loss.backward()
+                optimizer.step()
+                train_losses.append(loss.item())
 
-        train_loss = float(np.mean(train_losses))
-        val_loss = float(np.mean(val_losses))
-        history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
-        print(f"  [{node}] epoch {epoch + 1}/{cfg.epochs}: train_loss={train_loss:.4f} val_loss={val_loss:.4f}")
+            model.eval()
+            val_losses = []
+            with torch.no_grad():
+                for batch in val_loader:
+                    recon = model(batch)
+                    val_losses.append(reconstruction_error(batch, recon).mean().item())
 
-    node_dir = out_dir / node
-    node_dir.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), node_dir / "model.pt")
-    (node_dir / "scaler.json").write_text(json.dumps(scaler.to_dict()))
-    (node_dir / "history.json").write_text(json.dumps(history))
+            train_loss = float(np.mean(train_losses))
+            val_loss = float(np.mean(val_losses))
+            history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
+            mlflow.log_metrics({"train_loss": train_loss, "val_loss": val_loss}, step=epoch)
+            print(f"  [{node}] epoch {epoch + 1}/{cfg.epochs}: train_loss={train_loss:.4f} val_loss={val_loss:.4f}")
+
+        node_dir = out_dir / node
+        node_dir.mkdir(parents=True, exist_ok=True)
+        torch.save(model.state_dict(), node_dir / "model.pt")
+        (node_dir / "scaler.json").write_text(json.dumps(scaler.to_dict()))
+        (node_dir / "history.json").write_text(json.dumps(history))
+        mlflow.log_artifacts(str(node_dir))
+
     return {"node": node, "final_train_loss": history[-1]["train_loss"], "final_val_loss": history[-1]["val_loss"]}
 
 
@@ -110,7 +127,13 @@ def main() -> None:
     parser.add_argument("--window-size", type=int, default=TrainConfig.window_size)
     parser.add_argument("--epochs", type=int, default=TrainConfig.epochs)
     parser.add_argument("--seed", type=int, default=TrainConfig.seed)
+    parser.add_argument("--tracking-uri", default="sqlite:///ml/mlruns/mlflow.db", help="MLflow tracking URI -- a local SQLite store by default, point at a real MLflow server here if you run one")
+    parser.add_argument("--experiment", default="piwatch-anomaly-detection")
     args = parser.parse_args()
+
+    Path("ml/mlruns").mkdir(parents=True, exist_ok=True)
+    mlflow.set_tracking_uri(args.tracking_uri)
+    mlflow.set_experiment(args.experiment)
 
     cfg = TrainConfig(window_size=args.window_size, epochs=args.epochs, seed=args.seed)
     set_seed(cfg.seed)

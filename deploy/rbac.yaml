@@ -13,6 +13,11 @@ rules:
   - apiGroups: [""]
     resources: [nodes, pods, events, services, persistentvolumeclaims, persistentvolumes]
     verbs: [get, list, watch]
+  # Metadata only -- backend/app/collectors/k8s_watch.py's map_secret never reads
+  # .data, so this grant never exposes secret values, just name/type/key-count/age.
+  - apiGroups: [""]
+    resources: [secrets, configmaps]
+    verbs: [get, list, watch]
   - apiGroups: [""]
     resources: [pods/log]
     verbs: [get]

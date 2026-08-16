@@ -44,6 +44,11 @@ rules:
   - apiGroups: [gateway.networking.k8s.io]
     resources: [gateways, httproutes]
     verbs: [get, list]
+  # Optional: only used if you're specifically on NGINX Gateway Fabric (not every Gateway
+  # API implementation has this CRD) -- see backend/app/collectors/gateway.py.
+  - apiGroups: [gateway.nginx.org]
+    resources: [ratelimitpolicies]
+    verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

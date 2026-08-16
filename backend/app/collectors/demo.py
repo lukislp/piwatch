@@ -352,6 +352,24 @@ async def run(state: ClusterState):
             },
         }
     )
+    # --- seed a RateLimitPolicy (showcases the Overview page's Rate Limit Policies
+    # card, an NGINX Gateway Fabric extension -- even though there's no real Gateway
+    # Fabric/cluster behind demo mode) ---
+    state.set_rate_limit_policies(
+        {
+            "monitoring/piwatch-rate-limit": {
+                "key": "monitoring/piwatch-rate-limit",
+                "name": "piwatch-rate-limit",
+                "namespace": "monitoring",
+                "targets": ["HTTPRoute/piwatch"],
+                "rules": ["20r/s (burst 200)"],
+                "reject_code": 503,
+                "accepted": True,
+                "reason": None,
+                "message": None,
+            },
+        }
+    )
 
     # --- seed Flux Kustomization sync status (showcases the GitOps section even
     # though there's no real Flux/cluster behind demo mode) ---

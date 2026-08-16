@@ -151,6 +151,8 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
       return { ...snap, gateways: d };
     case "http_routes":
       return { ...snap, http_routes: d };
+    case "rate_limit_policies":
+      return { ...snap, rate_limit_policies: d };
     case "healthcheck": {
       const name = d.name as string;
       const entry = snap.healthchecks[name] ?? { config: d.config ?? { name }, history: [] };

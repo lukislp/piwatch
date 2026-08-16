@@ -694,11 +694,90 @@ function Autoscalers({ snap }: { snap: Snapshot }) {
   );
 }
 
+// ---------------- Pod Placement (bin-packing) ----------------
+// Current-snapshot view of which pods are using how much of each node's CPU/RAM capacity
+// -- complements the historical NodeChart line-charts below with a "who's using what right
+// now" breakdown per node. Segments are colored by namespace (reusing seriesColor's stable
+// per-key slots, normally used for per-node coloring) rather than per-pod: most clusters
+// have far fewer distinct namespaces than pods, keeping the bar visually readable instead
+// of a wall of near-identical slivers.
+function PodPlacement({ snap, mode }: { snap: Snapshot; mode: Mode }) {
+  const nodes = Object.values(snap.nodes).sort((a, b) => a.name.localeCompare(b.name));
+  const pods = Object.values(snap.pods);
+  if (nodes.length === 0) return null;
+  const namespaces = [...new Set(pods.map((p) => p.namespace))].sort();
+
+  return (
+    <div className="card">
+      <h2>Pod Placement</h2>
+      <div className="row" style={{ marginBottom: 12, flexWrap: "wrap", gap: "6px 16px" }}>
+        {namespaces.map((ns) => (
+          <span key={ns} className="muted" style={{ fontSize: 12 }}>
+            <Dot color={seriesColor(ns, mode)} />{ns}
+          </span>
+        ))}
+      </div>
+      {nodes.map((n) => {
+        const nodePods = pods.filter((p) => p.node === n.name);
+        const cpuCapacity = parseCpuQty(n.cpu_capacity);
+        const memCapacity = parseMemQty(n.mem_capacity);
+        return (
+          <div key={n.name} style={{ marginBottom: 16 }}>
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+              <strong>{n.name}</strong>
+              <span className="muted">{nodePods.length} pod{nodePods.length !== 1 ? "s" : ""}</span>
+            </div>
+            {(["cpu", "mem"] as const).map((kind) => {
+              const capacity = kind === "cpu" ? cpuCapacity : memCapacity;
+              const segments = nodePods
+                .map((p) => {
+                  const m = snap.pod_metrics[p.key];
+                  const value = (kind === "cpu" ? m?.cpu_cores : m?.mem_bytes) ?? 0;
+                  return { pod: p, value };
+                })
+                .filter((s) => s.value > 0)
+                .sort((a, b) => b.value - a.value);
+              const used = segments.reduce((sum, s) => sum + s.value, 0);
+              const freePct = capacity > 0 ? Math.max(0, 100 * (1 - used / capacity)) : 0;
+              return (
+                <div key={kind} style={{ marginBottom: 6 }}>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 2 }}>
+                    {kind === "cpu" ? "CPU" : "RAM"}:{" "}
+                    {capacity > 0
+                      ? kind === "cpu"
+                        ? `${used.toFixed(2)} / ${capacity.toFixed(1)} cores`
+                        : fmtBytesPair(used, capacity)
+                      : "–"}
+                  </div>
+                  <div style={{ display: "flex", height: 18, borderRadius: 4, overflow: "hidden", background: "var(--grid)" }}>
+                    {segments.map((s) => {
+                      const pct = capacity > 0 ? (100 * s.value) / capacity : 0;
+                      return (
+                        <div
+                          key={s.pod.key}
+                          title={`${s.pod.key}: ${kind === "cpu" ? `${s.value.toFixed(3)} cores` : fmtBytes(s.value)}`}
+                          style={{ width: `${pct}%`, background: seriesColor(s.pod.namespace, mode) }}
+                        />
+                      );
+                    })}
+                    {freePct > 0.5 && <div style={{ width: `${freePct}%` }} title="Free capacity" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------------- Nodes (charts) ----------------
 export function Nodes({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const mbFormatter = (v: number) => `${v.toFixed(v < 10 ? 1 : 0)} MB/s`;
   return (
     <>
+      <PodPlacement snap={snap} mode={mode} />
       <NodeChart histories={snap.node_history} field="cpu_pct" mode={mode} unit="%" domain={[0, 100]} title="CPU usage" />
       <NodeChart histories={snap.node_history} field="mem_pct" mode={mode} unit="%" domain={[0, 100]} title="RAM usage" />
       <NodeChart histories={snap.node_history} field="temp_c" mode={mode} unit="°C" domain={[30, 90]} title="CPU temperature" />

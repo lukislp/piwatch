@@ -297,6 +297,46 @@ async def run(state: ClusterState):
         },
     )
 
+    # --- seed Secrets & ConfigMaps (showcases the Workloads page's Secrets & ConfigMaps
+    # card -- ages are deliberately spread out, unlike most other demo objects, since
+    # age is the entire point of the feature) ---
+    # (namespace, name, type, key count, age in seconds)
+    for ns, name, secret_type, key_count, age_s in [
+        ("home", "home-assistant-token", "Opaque", 1, 86400 * 40),
+        ("home", "mosquitto-tls", "kubernetes.io/tls", 2, 86400 * 25),
+        # deliberately very old -- showcases the age-warning threshold without needing
+        # a real cluster whose secrets have actually gone that long without rotating.
+        ("monitoring", "piwatch-webhook-secret", "Opaque", 1, 86400 * 540),
+    ]:
+        state.upsert_secret(
+            f"{ns}/{name}",
+            {
+                "key": f"{ns}/{name}",
+                "name": name,
+                "namespace": ns,
+                "type": secret_type,
+                "key_count": key_count,
+                "immutable": False,
+                "created": time.time() - age_s,
+            },
+        )
+    # (namespace, name, key count, age in seconds)
+    for ns, name, key_count, age_s in [
+        ("home", "home-assistant-config", 3, 86400 * 60),
+        ("kube-system", "coredns", 1, 86400 * 200),
+    ]:
+        state.upsert_configmap(
+            f"{ns}/{name}",
+            {
+                "key": f"{ns}/{name}",
+                "name": name,
+                "namespace": ns,
+                "key_count": key_count,
+                "immutable": False,
+                "created": time.time() - age_s,
+            },
+        )
+
     # --- seed Gateway API routing status (showcases the Gateway section even though
     # there's no real Gateway API/cluster behind demo mode) ---
     state.set_gateways(

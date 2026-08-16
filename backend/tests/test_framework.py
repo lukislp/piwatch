@@ -195,6 +195,23 @@ def _networkpolicy_obj(
     return types.SimpleNamespace(metadata=metadata, spec=spec)
 
 
+def _secret_obj(name="sec1", namespace="default", secret_type="Opaque", data=None, immutable=False):
+    metadata = types.SimpleNamespace(name=name, namespace=namespace, creation_timestamp=datetime.now(timezone.utc))
+    return types.SimpleNamespace(
+        metadata=metadata, type=secret_type, data=data if data is not None else {"a": "Yg=="}, immutable=immutable,
+    )
+
+
+def _configmap_obj(name="cm1", namespace="default", data=None, binary_data=None, immutable=False):
+    metadata = types.SimpleNamespace(name=name, namespace=namespace, creation_timestamp=datetime.now(timezone.utc))
+    return types.SimpleNamespace(
+        metadata=metadata,
+        data=data if data is not None else {"key.yaml": "a: 1"},
+        binary_data=binary_data,
+        immutable=immutable,
+    )
+
+
 def _pv_obj(
     name="pv1", phase="Released", capacity="5Gi", storage_class="local-path",
     reclaim_policy="Retain", claim_namespace="home", claim_name="old-claim",
@@ -532,6 +549,41 @@ def test_map_pv_no_claim_ref_when_never_bound():
     assert d["claim_name"] is None
 
 
+def test_map_secret_reports_metadata_only_never_values():
+    from app.collectors.k8s_watch import map_secret
+
+    d = map_secret(_secret_obj(secret_type="kubernetes.io/tls", data={"tls.crt": "...", "tls.key": "..."}))
+    assert d["key"] == "default/sec1"
+    assert d["type"] == "kubernetes.io/tls"
+    assert d["key_count"] == 2
+    assert d["immutable"] is False
+    assert d["created"] is not None
+    assert "data" not in d and "tls.crt" not in d.values()
+
+
+def test_map_secret_no_data_means_zero_keys():
+    from app.collectors.k8s_watch import map_secret
+
+    d = map_secret(_secret_obj(data={}))
+    assert d["key_count"] == 0
+
+
+def test_map_configmap_counts_data_and_binary_data_keys():
+    from app.collectors.k8s_watch import map_configmap
+
+    d = map_configmap(_configmap_obj(data={"a": "1", "b": "2"}, binary_data={"c": "xx"}, immutable=True))
+    assert d["key"] == "default/cm1"
+    assert d["key_count"] == 3
+    assert d["immutable"] is True
+
+
+def test_map_configmap_no_data_means_zero_keys():
+    from app.collectors.k8s_watch import map_configmap
+
+    d = map_configmap(_configmap_obj(data={}, binary_data=None))
+    assert d["key_count"] == 0
+
+
 def test_map_event_uses_last_timestamp():
     from app.collectors.k8s_watch import map_event
 
@@ -591,6 +643,24 @@ def test_apply_all_kinds_upsert_and_delete():
     assert "ns/np1" in st.network_policies
     _apply(st, "networkpolicies", "DELETED", {"key": "ns/np1"})
     assert "ns/np1" not in st.network_policies
+
+    _apply(st, "secrets", "ADDED", {"key": "ns/sec1", "type": "Opaque"})
+    assert "ns/sec1" in st.secrets
+    # a noisy auto-managed type must never be stored, even on ADDED
+    _apply(st, "secrets", "ADDED", {"key": "ns/sa-token", "type": "kubernetes.io/service-account-token"})
+    assert "ns/sa-token" not in st.secrets
+    _apply(st, "secrets", "ADDED", {"key": "ns/helm-rel", "type": "helm.sh/release.v1"})
+    assert "ns/helm-rel" not in st.secrets
+    _apply(st, "secrets", "DELETED", {"key": "ns/sec1", "type": "Opaque"})
+    assert "ns/sec1" not in st.secrets
+
+    _apply(st, "configmaps", "ADDED", {"key": "ns/cm1", "name": "cm1"})
+    assert "ns/cm1" in st.configmaps
+    # the auto-created CA-bundle ConfigMap must never be stored, even on ADDED
+    _apply(st, "configmaps", "ADDED", {"key": "ns/kube-root-ca.crt", "name": "kube-root-ca.crt"})
+    assert "ns/kube-root-ca.crt" not in st.configmaps
+    _apply(st, "configmaps", "DELETED", {"key": "ns/cm1", "name": "cm1"})
+    assert "ns/cm1" not in st.configmaps
 
     _apply(st, "persistentvolumes", "ADDED", {"key": "pv1", "phase": "Released"})
     assert "pv1" in st.orphaned_pvs
@@ -692,7 +762,8 @@ class _FakeWatch:
 
 def _patch_k8s_client(
     monkeypatch, nodes=None, pods=None, deployments=None, statefulsets=None, daemonsets=None,
-    services=None, hpas=None, networkpolicies=None, persistentvolumes=None, events=None,
+    services=None, hpas=None, networkpolicies=None, secrets=None, configmaps=None,
+    persistentvolumes=None, events=None,
 ):
     """Patch kubernetes_asyncio.client's Api classes used by _watch_loop."""
     from kubernetes_asyncio import client as kclient
@@ -709,6 +780,12 @@ def _patch_k8s_client(
 
         async def list_service_for_all_namespaces(self):
             return _FakeList(services or [])
+
+        async def list_secret_for_all_namespaces(self):
+            return _FakeList(secrets or [])
+
+        async def list_config_map_for_all_namespaces(self):
+            return _FakeList(configmaps or [])
 
         async def list_persistent_volume(self):
             return _FakeList(persistentvolumes or [])
@@ -760,6 +837,8 @@ def _patch_k8s_client(
         ("daemonsets", "daemonsets", _daemonset_obj(), _daemonset_obj(name="ds2")),
         ("services", "services", _service_obj(), _service_obj(name="svc2")),
         ("hpas", "hpas", _hpa_obj(), _hpa_obj(name="h2")),
+        ("secrets", "secrets", _secret_obj(), _secret_obj(name="sec2")),
+        ("configmaps", "configmaps", _configmap_obj(), _configmap_obj(name="cm2")),
         ("events", "events", _event_obj(), _event_obj(uid="e2")),
     ],
 )
@@ -955,7 +1034,7 @@ def test_watch_loop_backoff_grows_across_repeated_failures(monkeypatch):
     assert sleep_calls == [1, 2]
 
 
-def test_run_starts_all_ten_watch_loops(monkeypatch):
+def test_run_starts_all_watch_loops(monkeypatch):
     from app.collectors import k8s_watch
     from app.state import ClusterState
 
@@ -975,7 +1054,7 @@ def test_run_starts_all_ten_watch_loops(monkeypatch):
     assert calls[0] == "config"
     assert set(calls[1:]) == {
         "nodes", "pods", "deployments", "statefulsets", "daemonsets", "services", "hpas",
-        "networkpolicies", "persistentvolumes", "events",
+        "networkpolicies", "secrets", "configmaps", "persistentvolumes", "events",
     }
 
 

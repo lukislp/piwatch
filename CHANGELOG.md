@@ -1,3 +1,16 @@
+# [1.30.0](https://github.com/lukislp/piwatch/compare/v1.29.0...v1.30.0) (2026-08-16)
+
+
+### Bug Fixes
+
+* re-trigger CI after semantic-release skipped again for the duplicate-hostname-detection PR ([7862321](https://github.com/lukislp/piwatch/commit/7862321011c454142933d171d8bf8a535a1b971d))
+* re-trigger CI after semantic-release skipped for the duplicate-hostname-detection PR ([4521211](https://github.com/lukislp/piwatch/commit/4521211a6b161126b9ca8ea1cfede436fe4b917d))
+
+
+### Features
+
+* flag HTTPRoutes that claim the same hostname ([148c77d](https://github.com/lukislp/piwatch/commit/148c77d404344eaf9c64375996bc847497b45e6e))
+
 # [1.29.0](https://github.com/lukislp/piwatch/compare/v1.28.0...v1.29.0) (2026-08-16)
 
 

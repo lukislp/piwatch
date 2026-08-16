@@ -1,3 +1,10 @@
+# [1.24.0](https://github.com/lukislp/piwatch/compare/v1.23.0...v1.24.0) (2026-08-16)
+
+
+### Features
+
+* split networking cards into a dedicated Network tab ([f0f75ff](https://github.com/lukislp/piwatch/commit/f0f75fff8b79e3a5640fae0a0de4e2c2c9ba3b2b))
+
 # [1.23.0](https://github.com/lukislp/piwatch/compare/v1.22.0...v1.23.0) (2026-08-16)
 
 

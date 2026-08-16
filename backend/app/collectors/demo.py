@@ -356,6 +356,21 @@ async def run(state: ClusterState):
                 "reason": "BackendNotFound",
                 "message": "service \"mosquitto-mqtt\" not found",
             },
+            # deliberately broken -- a leftover route still claiming the same hostname
+            # as home/home-assistant. Both individually show Accepted/ResolvedRefs, so
+            # only cross-route hostname comparison catches the shadowing.
+            "home/home-assistant-legacy": {
+                "key": "home/home-assistant-legacy",
+                "name": "home-assistant-legacy",
+                "namespace": "home",
+                "hostnames": ["home.demo.invalid"],
+                "parent_names": ["demo-gateway"],
+                "backend_names": ["home-assistant-old"],
+                "accepted": True,
+                "resolved_refs": True,
+                "reason": None,
+                "message": None,
+            },
         }
     )
     # --- seed a RateLimitPolicy (showcases the Overview page's Rate Limit Policies

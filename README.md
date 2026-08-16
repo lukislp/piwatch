@@ -32,6 +32,9 @@ cluster involved.
 - **Restart reason on hover**: the Workloads table's Restarts count shows the last container
   termination reason and exit code as a tooltip (e.g. `Error (exit 1)`) -- current state takes
   priority, falling back to `last_state` when kubelet already restarted the container
+- **Init container failure detail**: a pod stuck starting up shows `Init: 1/2` plus the
+  blocking container's specific reason (e.g. `CrashLoopBackOff`, `ImagePullBackOff`) --
+  otherwise only visible as the generic `PodInitializing` on the main containers
 - **Node pressure conditions**: the Overview page's node cards show a Pressure indicator
   (MemoryPressure/DiskPressure/PIDPressure) -- an earlier warning than waiting for the node to
   go NotReady entirely

@@ -2661,6 +2661,71 @@ def test_history_run_persists_node_metrics_and_prunes_periodically(monkeypatch, 
 
 
 # ==================================================================
+# app.collectors.dns_check
+# ==================================================================
+
+
+def test_dns_check_resolve_success_reports_ok_with_latency(monkeypatch):
+    from app.collectors import dns_check
+
+    async def fake_getaddrinfo(host, port):
+        assert host == dns_check.HOSTNAME
+        return [(2, 1, 6, "", ("10.43.0.1", 0))]
+
+    async def scenario():
+        loop = asyncio.get_running_loop()
+        monkeypatch.setattr(loop, "getaddrinfo", fake_getaddrinfo)
+        return await dns_check._resolve(dns_check.HOSTNAME)
+
+    ok, ms, detail = asyncio.run(scenario())
+    assert ok is True
+    assert ms is not None
+    assert detail == "resolved"
+
+
+def test_dns_check_resolve_failure_reports_exception_type(monkeypatch):
+    from app.collectors import dns_check
+
+    async def fake_getaddrinfo(host, port):
+        raise OSError("Name or service not known")
+
+    async def scenario():
+        loop = asyncio.get_running_loop()
+        monkeypatch.setattr(loop, "getaddrinfo", fake_getaddrinfo)
+        return await dns_check._resolve(dns_check.HOSTNAME)
+
+    ok, ms, detail = asyncio.run(scenario())
+    assert ok is False
+    assert ms is None
+    assert detail == "OSError"
+
+
+def test_dns_check_run_records_a_check_with_dns_url_config(monkeypatch):
+    from app.collectors import dns_check
+    from app.state import ClusterState
+
+    async def fake_resolve(hostname):
+        return True, 3.2, "resolved"
+
+    async def fake_sleep(seconds):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(dns_check, "_resolve", fake_resolve)
+    monkeypatch.setattr(dns_check.asyncio, "sleep", fake_sleep)
+
+    st = ClusterState()
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(dns_check.run(st))
+
+    entry = st.healthchecks[dns_check.CHECK_NAME]
+    assert entry["config"] == {
+        "name": "coredns", "type": "dns", "url": f"dns://{dns_check.HOSTNAME}",
+    }
+    assert entry["last"]["ok"] is True
+    assert entry["last"]["ms"] == 3.2
+
+
+# ==================================================================
 # app.ws
 # ==================================================================
 
@@ -2988,6 +3053,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
     monkeypatch.setattr(main_mod.gateway, "run", fake_collector)
     monkeypatch.setattr(main_mod.autochecks, "run", fake_collector)
     monkeypatch.setattr(main_mod.history, "run", fake_collector)
+    monkeypatch.setattr(main_mod.dns_check, "run", fake_collector)
 
     from fastapi.testclient import TestClient
 
@@ -2997,7 +3063,7 @@ def test_lifespan_real_cluster_mode_starts_k8s_collectors(monkeypatch, tmp_path)
         r = client.get("/readyz")
         assert r.status_code == 503
         assert r.json() == {"ready": False}
-    assert len(started) == 8  # k8s_watch, metrics, hardware, flux, pvc, gateway, autochecks, history
+    assert len(started) == 9  # k8s_watch, metrics, hardware, flux, pvc, gateway, autochecks, history, dns_check
 
 
 def test_get_state_endpoint_returns_snapshot(monkeypatch, tmp_path):

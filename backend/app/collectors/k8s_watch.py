@@ -72,8 +72,37 @@ def _last_termination(state, last_state) -> tuple[str | None, int | None]:
     return (term.reason, term.exit_code) if term else (None, None)
 
 
+def _init_container_status(p) -> tuple[str | None, str | None]:
+    """(progress, reason) describing init container startup, e.g. ("1/2",
+    "CrashLoopBackOff") -- kubectl derives its familiar "Init:CrashLoopBackOff" pod status
+    the same way, but PiWatch doesn't otherwise surface init containers at all: while
+    they're running, the main containers' own waiting reason is just the generic
+    "PodInitializing", with no hint of which init container is stuck or why. Both values
+    are None once every init container has completed successfully (the common case, and
+    the only possibility once the pod is actually Running) or if the pod has none."""
+    statuses = p.status.init_container_statuses or []
+    if not statuses:
+        return None, None
+    total = len(statuses)
+    completed = sum(
+        1 for s in statuses if s.state and s.state.terminated and s.state.terminated.exit_code == 0
+    )
+    if completed == total:
+        return None, None
+    reason = None
+    for s in statuses:
+        if s.state and s.state.waiting:
+            reason = s.state.waiting.reason
+            break
+        if s.state and s.state.terminated and s.state.terminated.exit_code != 0:
+            reason = s.state.terminated.reason or f"Error (exit {s.state.terminated.exit_code})"
+            break
+    return f"{completed}/{total}", reason
+
+
 def map_pod(p) -> dict:
     statuses = p.status.container_statuses or []
+    init_progress, init_reason = _init_container_status(p)
     restarts = sum(s.restart_count for s in statuses)
     ready = sum(1 for s in statuses if s.ready)
     waiting_reason = None
@@ -104,6 +133,8 @@ def map_pod(p) -> dict:
         "oom_killed": oom_killed,
         "last_exit_reason": last_exit_reason,
         "last_exit_code": last_exit_code,
+        "init_progress": init_progress,
+        "init_reason": init_reason,
         "created": p.metadata.creation_timestamp.timestamp() if p.metadata.creation_timestamp else None,
     }
 

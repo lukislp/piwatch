@@ -36,6 +36,11 @@ export interface PodInfo {
    * last_state, whichever is more current) -- null if never terminated. */
   last_exit_reason?: string | null;
   last_exit_code?: number | null;
+  /** Init container startup progress (e.g. "1/2") and the blocking container's reason
+   * (e.g. "CrashLoopBackOff") -- both null once every init container has completed, or
+   * if the pod has none. */
+  init_progress?: string | null;
+  init_reason?: string | null;
   created?: number;
 }
 

@@ -102,6 +102,12 @@ cluster involved.
 - **Orphaned PersistentVolume detection**: a Workloads-page card lists any PersistentVolume
   stuck in `Released` or `Failed` phase -- storage left behind after its PVC was deleted (common
   with a `Retain` reclaim policy) that nothing else surfaces. Hidden entirely when there aren't any
+- **Secret/ConfigMap age**: a Workloads-page card lists every Secret and ConfigMap with its key
+  count and age, sorted oldest-first, flagging anything older than a year as a rotation candidate.
+  Only metadata is ever read -- values never pass through the backend or reach the frontend.
+  Noise is filtered out server-side (ServiceAccount token Secrets, Helm release storage, the
+  auto-created `kube-root-ca.crt` ConfigMap), so this only shows Secrets/ConfigMaps a human
+  actually manages
 - **Autoscaler status**: an "Autoscalers" card on the Workloads page lists every
   HorizontalPodAutoscaler with its target, current/min/max replicas and current vs. target
   CPU/memory utilization, flagging one that's hit its scaling limit or can't scale at all.

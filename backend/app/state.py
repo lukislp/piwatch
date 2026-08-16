@@ -51,6 +51,12 @@ class ClusterState:
         self.hpas: dict[str, dict[str, Any]] = {}           # key: ns/name
         self.network_policies: dict[str, dict[str, Any]] = {}  # key: ns/name
         self.orphaned_pvs: dict[str, dict[str, Any]] = {}  # key: PV name; Released/Failed only
+        # key: ns/name; metadata only (name/type/key count/age), never .data -- see
+        # collectors/k8s_watch.py's map_secret. Noisy auto-managed types (ServiceAccount
+        # tokens, Helm release storage) are filtered out before ever reaching this dict.
+        self.secrets: dict[str, dict[str, Any]] = {}
+        # key: ns/name; kube-root-ca.crt (auto-created in every namespace) filtered out.
+        self.configmaps: dict[str, dict[str, Any]] = {}
         self.events: deque[dict[str, Any]] = deque(maxlen=EVENTS_LEN)
 
         # Hardware + metrics per node (latest sample)
@@ -180,6 +186,22 @@ class ClusterState:
     def remove_network_policy(self, key: str) -> None:
         self.network_policies.pop(key, None)
         self.publish("network_policy_deleted", {"key": key})
+
+    def upsert_secret(self, key: str, obj: dict) -> None:
+        self.secrets[key] = obj
+        self.publish("secret", obj)
+
+    def remove_secret(self, key: str) -> None:
+        self.secrets.pop(key, None)
+        self.publish("secret_deleted", {"key": key})
+
+    def upsert_configmap(self, key: str, obj: dict) -> None:
+        self.configmaps[key] = obj
+        self.publish("configmap", obj)
+
+    def remove_configmap(self, key: str) -> None:
+        self.configmaps.pop(key, None)
+        self.publish("configmap_deleted", {"key": key})
 
     def upsert_orphaned_pv(self, key: str, obj: dict) -> None:
         self.orphaned_pvs[key] = obj
@@ -327,6 +349,8 @@ class ClusterState:
             "services": self.services,
             "hpas": self.hpas,
             "network_policies": self.network_policies,
+            "secrets": self.secrets,
+            "configmaps": self.configmaps,
             "orphaned_pvs": self.orphaned_pvs,
             "events": list(self.events),
             "node_metrics": self.node_metrics,

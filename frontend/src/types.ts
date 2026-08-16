@@ -126,6 +126,25 @@ export interface NetworkPolicyInfo {
   egress_rules: number;
 }
 
+export interface SecretInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  type: string;
+  key_count: number;
+  immutable: boolean;
+  created?: number | null;
+}
+
+export interface ConfigMapInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  key_count: number;
+  immutable: boolean;
+  created?: number | null;
+}
+
 export interface EventInfo {
   uid: string;
   type: string;
@@ -346,6 +365,8 @@ export interface Snapshot {
   services: Record<string, ServiceInfo>;
   hpas: Record<string, HpaInfo>;
   network_policies: Record<string, NetworkPolicyInfo>;
+  secrets: Record<string, SecretInfo>;
+  configmaps: Record<string, ConfigMapInfo>;
   orphaned_pvs: Record<string, OrphanedPvInfo>;
   events: EventInfo[];
   node_metrics: Record<string, NodeMetrics>;

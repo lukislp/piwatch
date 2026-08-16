@@ -1,3 +1,10 @@
+# [1.26.0](https://github.com/lukislp/piwatch/compare/v1.25.0...v1.26.0) (2026-08-16)
+
+
+### Features
+
+* show init container failure detail on the Workloads pods table ([80b7fac](https://github.com/lukislp/piwatch/commit/80b7fac0cb834ecfdc8c735d7c5f5e2ea912e76c))
+
 # [1.25.0](https://github.com/lukislp/piwatch/compare/v1.24.0...v1.25.0) (2026-08-16)
 
 

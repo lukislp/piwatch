@@ -108,6 +108,20 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
       delete network_policies[d.key];
       return { ...snap, network_policies };
     }
+    case "secret":
+      return { ...snap, secrets: { ...snap.secrets, [d.key]: d } };
+    case "secret_deleted": {
+      const secrets = { ...snap.secrets };
+      delete secrets[d.key];
+      return { ...snap, secrets };
+    }
+    case "configmap":
+      return { ...snap, configmaps: { ...snap.configmaps, [d.key]: d } };
+    case "configmap_deleted": {
+      const configmaps = { ...snap.configmaps };
+      delete configmaps[d.key];
+      return { ...snap, configmaps };
+    }
     case "orphaned_pv":
       return { ...snap, orphaned_pvs: { ...snap.orphaned_pvs, [d.key]: d } };
     case "orphaned_pv_deleted": {

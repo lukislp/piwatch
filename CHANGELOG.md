@@ -1,3 +1,10 @@
+## [1.31.1](https://github.com/lukislp/piwatch/compare/v1.31.0...v1.31.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* grant RBAC read access for Secrets/ConfigMaps ([a535452](https://github.com/lukislp/piwatch/commit/a5354522509f9ce64ce58fae783e5381c62a63d4)), closes [#40](https://github.com/lukislp/piwatch/issues/40)
+
 # [1.31.0](https://github.com/lukislp/piwatch/compare/v1.30.0...v1.31.0) (2026-08-16)
 
 

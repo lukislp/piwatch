@@ -1,3 +1,10 @@
+# [1.28.0](https://github.com/lukislp/piwatch/compare/v1.27.0...v1.28.0) (2026-08-16)
+
+
+### Features
+
+* show pod placement (bin-packing) on the Nodes page ([9002c0c](https://github.com/lukislp/piwatch/commit/9002c0c8ae23bdbcf724092e8e4b0d307d410200))
+
 # [1.27.0](https://github.com/lukislp/piwatch/compare/v1.26.0...v1.27.0) (2026-08-16)
 
 

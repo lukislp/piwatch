@@ -5,9 +5,14 @@
 - HTTPRoute -- is it accepted by its parent Gateway(s) and are its backend Service
   refs resolved (catches "route points at a Service that doesn't exist/match" --
   a failure mode invisible from the Deployment/Pod view alone)
+- RateLimitPolicy (gateway.nginx.org, NOT part of the standard Gateway API -- an NGINX
+  Gateway Fabric extension CRD) -- configured limits per targeted HTTPRoute, and whether
+  the policy was actually accepted
 
-Optional: Gateway API is not a hard dependency of PiWatch. Gateways and HTTPRoutes
-are polled and degraded independently, same reasoning as collectors/flux.py.
+Optional: Gateway API is not a hard dependency of PiWatch. Each resource kind is polled
+and degraded independently, same reasoning as collectors/flux.py -- RateLimitPolicy in
+particular only exists at all if you're specifically on NGINX Gateway Fabric, not every
+Gateway API implementation.
 """
 from __future__ import annotations
 
@@ -22,6 +27,8 @@ POLL_INTERVAL = 15
 RETRY_INTERVAL = 30
 GROUP = "gateway.networking.k8s.io"
 VERSION = "v1"
+NGINX_GROUP = "gateway.nginx.org"
+NGINX_VERSION = "v1alpha1"
 
 
 def _condition(conditions: list[dict], type_: str) -> dict:
@@ -128,8 +135,54 @@ def _map_http_route(item: dict) -> dict:
     }
 
 
-async def _list(custom, plural: str) -> list[dict]:
-    result = await custom.list_cluster_custom_object(GROUP, VERSION, plural)
+def _map_rate_limit_policy(item: dict) -> dict:
+    meta = item.get("metadata", {})
+    spec = item.get("spec", {})
+    status = item.get("status", {})
+    namespace = meta.get("namespace", "")
+    name = meta.get("name", "")
+
+    targets = [
+        f"{t.get('kind')}/{t.get('name')}" for t in (spec.get("targetRefs") or []) if t.get("name")
+    ]
+    rules = ((spec.get("rateLimit") or {}).get("local") or {}).get("rules") or []
+    rule_summaries = [
+        f"{r['rate']}" + (f" (burst {r['burst']})" if r.get("burst") else "")
+        for r in rules
+        if r.get("rate")
+    ]
+
+    # status.ancestors: one entry per Gateway that actually applies this policy (a policy
+    # can target a route attached to more than one Gateway) -- accepted only if every
+    # ancestor accepted it, same all-must-agree reasoning as _map_http_route's parents.
+    ancestors = status.get("ancestors") or []
+    accepted = True
+    reason = None
+    message = None
+    for ancestor in ancestors:
+        accepted_cond = _condition(ancestor.get("conditions") or [], "Accepted")
+        if accepted_cond.get("status") != "True":
+            accepted = False
+            reason = reason or accepted_cond.get("reason")
+            message = message or accepted_cond.get("message")
+    if not ancestors:
+        accepted = False
+
+    return {
+        "key": f"{namespace}/{name}",
+        "name": name,
+        "namespace": namespace,
+        "targets": targets,
+        "rules": rule_summaries,
+        "reject_code": (spec.get("rateLimit") or {}).get("rejectCode"),
+        "accepted": accepted,
+        "reason": reason,
+        "message": message,
+    }
+
+
+async def _list(custom, plural: str, group: str = GROUP, version: str = VERSION) -> list[dict]:
+    result = await custom.list_cluster_custom_object(group, version, plural)
     return result.get("items", [])
 
 
@@ -173,6 +226,17 @@ async def run(state: ClusterState):
                         warned["httproutes"] = False
                     except Exception as exc:
                         warn_once("httproutes", exc)
+
+                    try:
+                        items = await _list(custom, "ratelimitpolicies", NGINX_GROUP, NGINX_VERSION)
+                        mapped = {}
+                        for item in items:
+                            m = _map_rate_limit_policy(item)
+                            mapped[m["key"]] = m
+                        state.set_rate_limit_policies(mapped)
+                        warned["ratelimitpolicies"] = False
+                    except Exception as exc:
+                        warn_once("ratelimitpolicies", exc)
 
                     await asyncio.sleep(POLL_INTERVAL)
         except asyncio.CancelledError:

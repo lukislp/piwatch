@@ -311,6 +311,18 @@ export interface HttpRouteInfo {
   message?: string | null;
 }
 
+export interface RateLimitPolicyInfo {
+  key: string;
+  name: string;
+  namespace: string;
+  targets: string[];
+  rules: string[];
+  reject_code?: number | null;
+  accepted: boolean;
+  reason?: string | null;
+  message?: string | null;
+}
+
 export interface HealthcheckEntry {
   config: { name: string; type?: string; url?: string; host?: string; port?: number; interval?: number };
   last?: CheckResult;
@@ -343,6 +355,7 @@ export interface Snapshot {
   pvcs: Record<string, PvcInfo>;
   gateways: Record<string, GatewayInfo>;
   http_routes: Record<string, HttpRouteInfo>;
+  rate_limit_policies: Record<string, RateLimitPolicyInfo>;
 }
 
 export type ConnStatus = "connecting" | "open" | "closed" | "unauthorized";

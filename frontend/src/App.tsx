@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Events, Healthchecks, Logs, Nodes, Nvme, Overview, Workloads } from "./pages";
+import { Events, Healthchecks, Logs, Network, Nodes, Nvme, Overview, Workloads } from "./pages";
 import { authRequired, clearToken, getToken, login, useClusterStore } from "./store";
 import { STATUS, useTheme } from "./theme";
 import { Dot } from "./components";
 
-const TABS = ["Overview", "Nodes", "Workloads", "NVMe", "Checks", "Logs", "Events"] as const;
+const TABS = ["Overview", "Network", "Nodes", "Workloads", "NVMe", "Checks", "Logs", "Events"] as const;
 
 function Login({ onDone }: { onDone: () => void }) {
   const [pw, setPw] = useState("");
@@ -68,6 +68,7 @@ export default function App() {
       ) : (
         <>
           {tab === "Overview" && <Overview snap={snapshot} mode={mode} />}
+          {tab === "Network" && <Network snap={snapshot} />}
           {tab === "Nodes" && <Nodes snap={snapshot} mode={mode} />}
           {tab === "Workloads" && <Workloads snap={snapshot} mode={mode} />}
           {tab === "NVMe" && <Nvme snap={snapshot} mode={mode} />}

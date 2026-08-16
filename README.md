@@ -108,11 +108,23 @@ cluster involved.
 
 ## Architecture
 
-```
-Browser ⇄ WSS ⇄ Gateway/Ingress ⇄ Service ⇄ 2× piwatch pod (anti-affinity)
-                                                │ FastAPI + React static files
-                                                │ Watcher/poller/checks (independent per replica)
-                              DaemonSet node-agent (1/Pi, /sys + /proc read-only)
+```mermaid
+flowchart LR
+    Browser(["Browser"]) <-->|WSS| GW["Gateway / Ingress"]
+    GW <--> SVC["Service"]
+
+    subgraph Replicas["2× piwatch pod (anti-affinity, independent state per replica)"]
+        direction LR
+        Pod1["Pod 1\nFastAPI + React static\nwatcher / poller / checks"]
+        Pod2["Pod 2\nFastAPI + React static\nwatcher / poller / checks"]
+    end
+
+    SVC <--> Pod1
+    SVC <--> Pod2
+    Pod1 -->|watch / poll| K8s["Kubernetes API\n+ metrics-server"]
+    Pod2 -->|watch / poll| K8s
+    Pod1 -->|poll /metrics| Agent["DaemonSet node-agent\n1 per Pi · /sys + /proc read-only"]
+    Pod2 -->|poll /metrics| Agent
 ```
 
 Each replica keeps its own state in RAM (stateless externally, no shared
@@ -214,6 +226,7 @@ cd backend && python -m pytest tests/
 | `PIWATCH_DEMO` | `1` = demo mode with fake data | – |
 | `PIWATCH_CHECKS_FILE` | Path to the healthcheck YAML | `/config/healthchecks.yaml` |
 | `PIWATCH_AGENT_SERVICE` | Headless service for the node-agents | `piwatch-node-agent.monitoring…` |
+| `PIWATCH_AGENT_PORT` | Port the node-agents listen on | `9101` |
 | `PIWATCH_PROMETHEUS_URL` | Prometheus base URL, for PVC usage % (optional) | – |
 | `PIWATCH_AUTO_HEALTHCHECKS` | `1` = auto-generate checks from HTTPRoutes/LoadBalancer Services | – |
 | `PIWATCH_HISTORY_DB` | Path to a SQLite file for persistent node history (optional) | – |
@@ -221,8 +234,9 @@ cd backend && python -m pytest tests/
 
 ## Deliberate simplifications
 
-- History data lives only in RAM (~3h); it resets on pod restart.
-  Possible extension: SQLite/PVC or Prometheus.
+- History defaults to RAM-only (~3h, resets on pod restart); `PIWATCH_HISTORY_DB` makes
+  it survive restarts (see above), but there's still no historical drill-down UI beyond
+  the live chart window.
 - No alerting (push/mail) — the pub/sub structure is prepared for it.
 
 ## License

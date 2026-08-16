@@ -1,3 +1,15 @@
+# [1.22.0](https://github.com/lukislp/piwatch/compare/v1.21.1...v1.22.0) (2026-08-16)
+
+
+### Bug Fixes
+
+* re-trigger CI after semantic-release skipped for the NetworkPolicy PR ([28d97bc](https://github.com/lukislp/piwatch/commit/28d97bc4086a52b06956a36a51e3b7ddb5a0790a))
+
+
+### Features
+
+* show NetworkPolicy overview on the Overview page ([b3a8504](https://github.com/lukislp/piwatch/commit/b3a850471484edc4121c3080034253d16fcf4819))
+
 ## [1.21.1](https://github.com/lukislp/piwatch/compare/v1.21.0...v1.21.1) (2026-08-15)
 
 

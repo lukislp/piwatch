@@ -62,23 +62,24 @@ cluster involved.
   run and last Git push -- and the tag actually running right now (best-effort match against
   Deployment images by repository), highlighted when it's behind the latest scanned tag. Not a
   hard dependency -- stays hidden if Flux (or image automation) isn't installed
-- **Gateway API routing status** (optional): if you route traffic through the
-  [Gateway API](https://gateway-api.sigs.k8s.io/), a "Gateway API" card on the Overview page
-  shows each Gateway's Programmed status, assigned address and listener count, plus each
-  HTTPRoute's accepted/backend-resolved status -- catches a route pointing at a Service that
-  doesn't exist or doesn't match, a failure mode invisible from the Deployment/Pod view alone.
-  Not a hard dependency -- stays hidden if you don't use the Gateway API
-- **Rate limit policies**: if you're on [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric),
-  a "Rate Limit Policies" card on the Overview page lists every `RateLimitPolicy` with its
-  target route, configured limits and Accepted status. Stays hidden if you don't use any --
-  this is an NGINX Gateway Fabric extension, not part of the standard Gateway API
-- **LoadBalancer Service status**: a card on the Overview page lists every `type: LoadBalancer`
-  Service with its cluster/external IP and ports, flagging any still stuck waiting for an
-  address (e.g. no free IP left in your MetalLB pool). Stays hidden if you don't run any
-- **Network Policies**: a card on the Overview page lists every NetworkPolicy with its pod
-  selector, Ingress/Egress types and rule counts -- a quick overview of what's restricted
-  where, without `kubectl get networkpolicy -A` across every namespace. Stays hidden if you
-  don't use any
+- **Network tab**: a dedicated page for everything routing/policy-related, kept off Overview
+  so the "is everything OK" glance stays scannable:
+  - **Gateway API routing status** (optional): if you route traffic through the
+    [Gateway API](https://gateway-api.sigs.k8s.io/), a "Gateway API" card shows each Gateway's
+    Programmed status, assigned address and listener count, plus each HTTPRoute's
+    accepted/backend-resolved status -- catches a route pointing at a Service that doesn't
+    exist or doesn't match, a failure mode invisible from the Deployment/Pod view alone. Not a
+    hard dependency -- stays hidden if you don't use the Gateway API
+  - **Rate limit policies**: if you're on [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric),
+    a "Rate Limit Policies" card lists every `RateLimitPolicy` with its target route,
+    configured limits and Accepted status. Stays hidden if you don't use any -- this is an
+    NGINX Gateway Fabric extension, not part of the standard Gateway API
+  - **LoadBalancer Service status**: lists every `type: LoadBalancer` Service with its
+    cluster/external IP and ports, flagging any still stuck waiting for an address (e.g. no
+    free IP left in your MetalLB pool). Stays hidden if you don't run any
+  - **Network Policies**: lists every NetworkPolicy with its pod selector, Ingress/Egress
+    types and rule counts -- a quick overview of what's restricted where, without
+    `kubectl get networkpolicy -A` across every namespace. Stays hidden if you don't use any
 - **PVC storage usage**: a "Storage" card on the Workloads page lists every PersistentVolumeClaim
   with its status, storage class and capacity. Usage % additionally needs
   [Prometheus](https://prometheus.io/) scraping kubelet (set `PIWATCH_PROMETHEUS_URL`) -- without

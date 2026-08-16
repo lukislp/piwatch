@@ -185,6 +185,31 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       </div>
       <GitOpsStatus snap={snap} />
       <ImageAutomationStatus snap={snap} />
+    </>
+  );
+}
+
+// ---------------- Network ----------------
+// Split out of Overview once it grew to 4 networking-specific cards (Gateway API,
+// RateLimitPolicies, LoadBalancer Services, NetworkPolicies) on top of the tiles/node
+// cards/GitOps already there -- kept Overview scannable as a single "is everything OK"
+// glance instead of a long scroll.
+export function Network({ snap }: { snap: Snapshot }) {
+  const empty =
+    Object.keys(snap.gateways).length === 0 &&
+    Object.keys(snap.http_routes).length === 0 &&
+    Object.keys(snap.rate_limit_policies).length === 0 &&
+    Object.keys(snap.services).length === 0 &&
+    Object.keys(snap.network_policies).length === 0;
+  if (empty) {
+    return (
+      <div className="card muted">
+        Nothing to show -- no Gateway API, LoadBalancer Services or NetworkPolicies detected on this cluster.
+      </div>
+    );
+  }
+  return (
+    <>
       <GatewayStatus snap={snap} />
       <RateLimitPolicies snap={snap} />
       <LoadBalancerStatus snap={snap} />

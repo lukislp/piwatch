@@ -8,7 +8,7 @@ files. On startup, the lifespan launches the collectors:
   PVC poller (usage % additionally needs PIWATCH_PROMETHEUS_URL), Gateway API poller,
   auto-healthchecks from discovered HTTPRoutes/Services (opt-in via
   PIWATCH_AUTO_HEALTHCHECKS), node-history persistence to survive a restart (opt-in via
-  PIWATCH_HISTORY_DB)
+  PIWATCH_HISTORY_DB), a CoreDNS resolution healthcheck (always on)
 - demo mode (PIWATCH_DEMO=1 or no cluster reachable): simulator
 
 Run locally:  PIWATCH_DEMO=1 uvicorn app.main:app --reload
@@ -29,6 +29,7 @@ from . import auth, ws
 from .collectors import (
     autochecks,
     demo,
+    dns_check,
     flux,
     gateway,
     hardware,
@@ -81,6 +82,7 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(gateway.run(state)))
         tasks.append(asyncio.create_task(autochecks.run(state)))
         tasks.append(asyncio.create_task(history.run(state)))
+        tasks.append(asyncio.create_task(dns_check.run(state)))
     tasks.append(asyncio.create_task(healthcheck.run(state)))
     try:
         yield

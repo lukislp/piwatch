@@ -552,6 +552,12 @@ async def run(state: ClusterState):
         for ns, pod, _, _ in PODS
     }
 
+    # Showcases the Checks page's always-on CoreDNS resolution healthcheck (real mode's
+    # collectors/dns_check.py doesn't run in demo mode -- there's no real cluster DNS to
+    # resolve against) -- very high demo_ok since CoreDNS should almost never actually fail.
+    coredns_latency = _Walker(2.0, 0.5, 8.0, 1.0)
+    coredns_config = {"name": "coredns", "type": "dns", "url": "dns://kubernetes.default.svc.cluster.local"}
+
     NODE_CPU_CORES = 4
     NODE_MEM_BYTES = 8 * 1024**3  # matches the "4" / "8Gi" node capacity seeded above
 
@@ -603,6 +609,12 @@ async def run(state: ClusterState):
             state.record_pod_sample(
                 key, {"cpu_cores": round(pod_cpu[key].next(), 3), "mem_bytes": int(pod_mem[key].next())}
             )
+        coredns_ok = rng.random() < 0.999
+        state.record_check(
+            "coredns", coredns_config, coredns_ok,
+            coredns_latency.next() if coredns_ok else None,
+            "resolved" if coredns_ok else "TimeoutError",
+        )
         # keep the GitOps countdown correct if a demo session runs past one full cycle
         if tick % 12 == 0:
             _seed_flux()

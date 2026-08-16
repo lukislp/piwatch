@@ -95,6 +95,10 @@ cluster involved.
   HorizontalPodAutoscaler with its target, current/min/max replicas and current vs. target
   CPU/memory utilization, flagging one that's hit its scaling limit or can't scale at all.
   Hidden entirely if you don't use HPAs
+- **CoreDNS healthcheck** (always on): resolves a well-known in-cluster DNS name every 30s
+  using the pod's own resolver, catching a classic, otherwise invisible failure mode --
+  cluster DNS being broken or slow. Needs no RBAC and no configuration; shows up on the
+  Checks page like any other check
 - **HTTP/TCP healthchecks** for your own services (Home Assistant, MQTT, …) with uptime history
 - **Auto-discovered healthchecks** (optional, set `PIWATCH_AUTO_HEALTHCHECKS=1`): a check for
   every accepted HTTPRoute (HTTP(S) request straight to its Gateway's Service ClusterIP, with

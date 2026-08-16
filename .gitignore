@@ -15,4 +15,5 @@ CLAUDE.md
 ml/data/raw/
 ml/data/parquet/
 ml/exploration/figures/
+ml/model/checkpoints/
 ml/mlruns/

@@ -68,6 +68,10 @@ cluster involved.
   HTTPRoute's accepted/backend-resolved status -- catches a route pointing at a Service that
   doesn't exist or doesn't match, a failure mode invisible from the Deployment/Pod view alone.
   Not a hard dependency -- stays hidden if you don't use the Gateway API
+- **Rate limit policies**: if you're on [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric),
+  a "Rate Limit Policies" card on the Overview page lists every `RateLimitPolicy` with its
+  target route, configured limits and Accepted status. Stays hidden if you don't use any --
+  this is an NGINX Gateway Fabric extension, not part of the standard Gateway API
 - **LoadBalancer Service status**: a card on the Overview page lists every `type: LoadBalancer`
   Service with its cluster/external IP and ports, flagging any still stuck waiting for an
   address (e.g. no free IP left in your MetalLB pool). Stays hidden if you don't run any

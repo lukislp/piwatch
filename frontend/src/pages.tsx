@@ -1099,11 +1099,70 @@ function DaemonSets({ snap }: { snap: Snapshot }) {
   );
 }
 
+// ---------------- Namespace summary ----------------
+// Rollup per namespace: pod readiness, restarts, CPU/RAM usage, warning events -- an
+// at-a-glance "how is namespace X doing" instead of cross-referencing the Pods/Events
+// tables by hand. Pure frontend aggregation of already-collected data.
+function NamespaceSummary({ snap }: { snap: Snapshot }) {
+  const pods = Object.values(snap.pods);
+  if (pods.length === 0) return null;
+
+  const namespaces = [...new Set(pods.map((p) => p.namespace))].sort();
+  const warningsByNs = new Map<string, number>();
+  for (const e of snap.events) {
+    if (e.type === "Warning" && e.namespace) {
+      warningsByNs.set(e.namespace, (warningsByNs.get(e.namespace) ?? 0) + 1);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Namespaces</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Namespace</th>
+            <th className="num">Pods</th>
+            <th className="num">Restarts</th>
+            <th className="num">CPU</th>
+            <th className="num">RAM</th>
+            <th className="num">Warnings</th>
+          </tr>
+        </thead>
+        <tbody>
+          {namespaces.map((ns) => {
+            const nsPods = pods.filter((p) => p.namespace === ns);
+            const running = nsPods.filter((p) => p.phase === "Running" || p.phase === "Succeeded").length;
+            const restarts = nsPods.reduce((sum, p) => sum + p.restarts, 0);
+            const cpu = nsPods.reduce((sum, p) => sum + (snap.pod_metrics[p.key]?.cpu_cores ?? 0), 0);
+            const mem = nsPods.reduce((sum, p) => sum + (snap.pod_metrics[p.key]?.mem_bytes ?? 0), 0);
+            const warnings = warningsByNs.get(ns) ?? 0;
+            return (
+              <tr key={ns}>
+                <td>{ns}</td>
+                <td className="num">
+                  <Dot color={running === nsPods.length ? STATUS.good : STATUS.warning} />
+                  {running}/{nsPods.length}
+                </td>
+                <td className="num" style={restarts > 0 ? { color: STATUS.warning } : undefined}>{restarts}</td>
+                <td className="num muted">{cpu > 0 ? `${Math.round(cpu * 1000)}m` : "–"}</td>
+                <td className="num muted">{mem > 0 ? `${Math.round(mem / 1024 / 1024)}Mi` : "–"}</td>
+                <td className="num" style={warnings > 0 ? { color: STATUS.warning } : undefined}>{warnings}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Workloads({ snap, mode }: { snap: Snapshot; mode: Mode }) {
   const deps = Object.values(snap.deployments).sort((a, b) => a.key.localeCompare(b.key));
   const pods = Object.values(snap.pods).sort((a, b) => a.key.localeCompare(b.key));
   return (
     <>
+      <NamespaceSummary snap={snap} />
       <div className="card">
         <h2>Deployments</h2>
         <table>

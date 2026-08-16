@@ -1,3 +1,10 @@
+# [1.27.0](https://github.com/lukislp/piwatch/compare/v1.26.0...v1.27.0) (2026-08-16)
+
+
+### Features
+
+* add healthcheck CSV export for ad-hoc SLA reports ([9d19d26](https://github.com/lukislp/piwatch/commit/9d19d265d67f1c1d559178635eaa17e1e26a290d))
+
 # [1.26.0](https://github.com/lukislp/piwatch/compare/v1.25.0...v1.26.0) (2026-08-16)
 
 

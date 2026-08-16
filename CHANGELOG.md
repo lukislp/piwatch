@@ -1,3 +1,10 @@
+# [1.25.0](https://github.com/lukislp/piwatch/compare/v1.24.0...v1.25.0) (2026-08-16)
+
+
+### Features
+
+* always-on CoreDNS resolution healthcheck ([a7a1b83](https://github.com/lukislp/piwatch/commit/a7a1b833a08fcc71baa0c28a4df6666d89b8978b))
+
 # [1.24.0](https://github.com/lukislp/piwatch/compare/v1.23.0...v1.24.0) (2026-08-16)
 
 

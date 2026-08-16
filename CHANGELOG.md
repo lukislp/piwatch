@@ -1,3 +1,10 @@
+# [1.31.0](https://github.com/lukislp/piwatch/compare/v1.30.0...v1.31.0) (2026-08-16)
+
+
+### Features
+
+* show Secret/ConfigMap age on the Workloads page ([318443a](https://github.com/lukislp/piwatch/commit/318443a753bac35485def45e23c26005104ef4b6))
+
 # [1.30.0](https://github.com/lukislp/piwatch/compare/v1.29.0...v1.30.0) (2026-08-16)
 
 

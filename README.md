@@ -21,6 +21,9 @@ cluster involved.
 
 ## Features
 
+- **Namespace summary**: a "Namespaces" card at the top of the Workloads page rolls up pod
+  readiness, restarts, CPU/RAM usage and warning-event counts per namespace -- an at-a-glance
+  "how is namespace X doing" instead of cross-referencing the Pods/Events tables by hand
 - **Kubernetes live**: nodes, pods, deployments, StatefulSets, DaemonSets, events via the watch
   API (no polling). StatefulSets/DaemonSets get their own rollout-in-progress indicator, from
   their own native status fields (no pod-naming heuristic needed there, unlike Deployments)

@@ -42,6 +42,9 @@ cluster involved.
   (`kubectl drain`/`cordon`) or tainted node -- otherwise indistinguishable from a normal
   Ready node at a glance
 - **Per-pod CPU/RAM usage**: live usage per pod/workload via metrics-server, right in the Workloads table
+- **Pod placement (bin-packing)**: a card at the top of the Nodes page shows, per node, a
+  stacked bar of which pods are using how much of its CPU/RAM capacity right now -- colored
+  by namespace, complementing the historical usage charts below it
 - **Pi hardware**: CPU temperature, load, RAM, disk, uptime per node (DaemonSet agent)
 - **NVMe + power health**: dedicated NVMe tab per node -- temperature, model, firmware,
   serial, capacity, wear %/spare capacity, power-on hours, power cycles, unsafe shutdowns,

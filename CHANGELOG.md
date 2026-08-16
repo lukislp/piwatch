@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/lukislp/piwatch/compare/v1.22.0...v1.23.0) (2026-08-16)
+
+
+### Features
+
+* show RateLimitPolicy overview on the Overview page ([20657df](https://github.com/lukislp/piwatch/commit/20657df0191c186caf1a2f1a4c70911a0ead1764))
+
 # [1.22.0](https://github.com/lukislp/piwatch/compare/v1.21.1...v1.22.0) (2026-08-16)
 
 

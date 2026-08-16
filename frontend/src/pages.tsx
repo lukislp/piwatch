@@ -464,7 +464,18 @@ function GatewayStatus({ snap }: { snap: Snapshot }) {
           </tbody>
         </table>
       )}
-      {routes.length > 0 && (
+      {routes.length > 0 && (() => {
+        // Same hostname claimed by more than one route is a real misconfiguration --
+        // whichever route the Gateway implementation picks "wins", silently shadowing the
+        // other(s). Nothing in the routes' own status conditions catches this (each route
+        // is individually Accepted/ResolvedRefs just fine), so it's computed here instead.
+        const hostnameOwners = new Map<string, string[]>();
+        for (const r of routes) {
+          for (const h of r.hostnames) {
+            hostnameOwners.set(h, [...(hostnameOwners.get(h) ?? []), r.key]);
+          }
+        }
+        return (
         <table style={{ marginTop: gateways.length > 0 ? 12 : 0 }}>
           <thead>
             <tr>
@@ -483,7 +494,24 @@ function GatewayStatus({ snap }: { snap: Snapshot }) {
                 <tr key={r.key}>
                   <td>{r.name}</td>
                   <td className="muted">{r.namespace}</td>
-                  <td className="mono muted">{r.hostnames.join(", ") || "–"}</td>
+                  <td className="mono muted">
+                    {r.hostnames.length > 0
+                      ? r.hostnames.map((h, i) => {
+                          const owners = (hostnameOwners.get(h) ?? []).filter((k) => k !== r.key);
+                          return (
+                            <span key={h}>
+                              {i > 0 && ", "}
+                              <span
+                                style={owners.length > 0 ? { color: STATUS.warning } : undefined}
+                                title={owners.length > 0 ? `Also claimed by: ${owners.join(", ")}` : undefined}
+                              >
+                                {h}{owners.length > 0 && " ⚠"}
+                              </span>
+                            </span>
+                          );
+                        })
+                      : "–"}
+                  </td>
                   <td className="muted">{r.parent_names.join(", ") || "–"}</td>
                   <td className="mono muted">{r.backend_names.join(", ") || "–"}</td>
                   <td>
@@ -501,7 +529,8 @@ function GatewayStatus({ snap }: { snap: Snapshot }) {
             })}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }

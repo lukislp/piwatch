@@ -77,8 +77,10 @@ cluster involved.
     [Gateway API](https://gateway-api.sigs.k8s.io/), a "Gateway API" card shows each Gateway's
     Programmed status, assigned address and listener count, plus each HTTPRoute's
     accepted/backend-resolved status -- catches a route pointing at a Service that doesn't
-    exist or doesn't match, a failure mode invisible from the Deployment/Pod view alone. Not a
-    hard dependency -- stays hidden if you don't use the Gateway API
+    exist or doesn't match, a failure mode invisible from the Deployment/Pod view alone. The
+    same table also flags any hostname claimed by more than one HTTPRoute, since each route
+    individually still shows Accepted/ResolvedRefs fine even though only one of them actually
+    wins the traffic. Not a hard dependency -- stays hidden if you don't use the Gateway API
   - **Rate limit policies**: if you're on [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric),
     a "Rate Limit Policies" card lists every `RateLimitPolicy` with its target route,
     configured limits and Accepted status. Stays hidden if you don't use any -- this is an

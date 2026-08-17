@@ -1,3 +1,10 @@
+# [1.36.0](https://github.com/lukislp/piwatch/compare/v1.35.0...v1.36.0) (2026-08-17)
+
+
+### Features
+
+* **ml:** S3 MLflow experiment tracking ([c9b46eb](https://github.com/lukislp/piwatch/commit/c9b46ebe476f691add62aa3d2ce628d8925ae681))
+
 # [1.35.0](https://github.com/lukislp/piwatch/compare/v1.34.0...v1.35.0) (2026-08-17)
 
 

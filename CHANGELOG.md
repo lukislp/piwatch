@@ -1,3 +1,11 @@
+# [1.37.0](https://github.com/lukislp/piwatch/compare/v1.36.0...v1.37.0) (2026-08-17)
+
+
+### Features
+
+* **ml:** S4 fair model-vs-baseline evaluation ([98f5605](https://github.com/lukislp/piwatch/commit/98f5605e230ab428ccbb7fc0e57aab467a41026f))
+* **ml:** S5 Telegram alerting (standalone, independent of the model) ([b8d37b4](https://github.com/lukislp/piwatch/commit/b8d37b47faa9b3060f6c4e00b745b83f746f3319))
+
 # [1.36.0](https://github.com/lukislp/piwatch/compare/v1.35.0...v1.36.0) (2026-08-17)
 
 

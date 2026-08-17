@@ -1,3 +1,11 @@
+# [1.35.0](https://github.com/lukislp/piwatch/compare/v1.34.0...v1.35.0) (2026-08-17)
+
+
+### Features
+
+* **ml:** S2 Isolation Forest baseline (multivariate) ([649f098](https://github.com/lukislp/piwatch/commit/649f098b7e838aaa4b4f36da3702c88ab4a2ae7a))
+* **ml:** S3 LSTM autoencoder + training pipeline ([ddff626](https://github.com/lukislp/piwatch/commit/ddff62644b092fd7f9ae4ef23bfb58d8666a8b44))
+
 # [1.34.0](https://github.com/lukislp/piwatch/compare/v1.33.0...v1.34.0) (2026-08-17)
 
 

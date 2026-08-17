@@ -1,3 +1,10 @@
+# [1.34.0](https://github.com/lukislp/piwatch/compare/v1.33.0...v1.34.0) (2026-08-17)
+
+
+### Features
+
+* **ml:** S2 statistical baselines (Z-score, EWMA) + shared eval harness ([50be890](https://github.com/lukislp/piwatch/commit/50be890567c03c5797e482dd52d9242ae2eaecb5))
+
 # [1.33.0](https://github.com/lukislp/piwatch/compare/v1.32.0...v1.33.0) (2026-08-17)
 
 

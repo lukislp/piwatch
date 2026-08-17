@@ -1,3 +1,10 @@
+# [1.33.0](https://github.com/lukislp/piwatch/compare/v1.32.0...v1.33.0) (2026-08-17)
+
+
+### Features
+
+* **ml:** S1 exploration + injected anomaly types ([aa37692](https://github.com/lukislp/piwatch/commit/aa37692a3aefec9f32fc79f5299475044c60420b))
+
 # [1.32.0](https://github.com/lukislp/piwatch/compare/v1.31.1...v1.32.0) (2026-08-16)
 
 

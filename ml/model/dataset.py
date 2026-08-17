@@ -75,7 +75,7 @@ def time_based_split(df: pd.DataFrame, val_fraction: float = 0.2) -> tuple[pd.Da
     return df.iloc[:split_at], df.iloc[split_at:]
 
 
-def _fill_gaps(g: pd.DataFrame) -> pd.DataFrame:
+def fill_gaps(g: pd.DataFrame) -> pd.DataFrame:
     """A handful of history rows have missing values in some feature columns
     -- record_node_sample() merges samples from separate collectors (CPU/RAM
     from metrics.py, temp/network from the node-agent's hardware push), so a
@@ -87,6 +87,9 @@ def _fill_gaps(g: pd.DataFrame) -> pd.DataFrame:
     adjacent, corrupting exactly the temporal structure windowing is trying
     to capture. bfill covers the rare case of a leading NaN with nothing
     before it to forward-fill from.
+
+    Public (not module-private) since ../evaluation/ reuses it too when
+    scoring a trained model against live/raw data outside of training.
     """
     g = g.copy()
     g[FEATURE_COLUMNS] = g[FEATURE_COLUMNS].ffill().bfill()
@@ -97,7 +100,7 @@ def prepare_node_windows(
     g: pd.DataFrame, window_size: int, stride: int, val_fraction: float,
 ) -> tuple[np.ndarray, np.ndarray, Scaler]:
     """One node's time-sorted rows -> (train_windows, val_windows, scaler)."""
-    g = _fill_gaps(g)
+    g = fill_gaps(g)
     train_df, val_df = time_based_split(g, val_fraction)
     scaler = Scaler.fit(train_df[FEATURE_COLUMNS].to_numpy())
     train_windows = build_windows(scaler.transform(train_df[FEATURE_COLUMNS].to_numpy()), window_size, stride)

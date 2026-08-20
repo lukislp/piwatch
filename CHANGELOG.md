@@ -1,3 +1,10 @@
+## [1.37.1](https://github.com/lukislp/piwatch/compare/v1.37.0...v1.37.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **ml:** stop MLflow from leaking a stray top-level mlruns/ directory ([7c10706](https://github.com/lukislp/piwatch/commit/7c10706a3eae10b3508d0036c529084ecb01042c))
+
 # [1.37.0](https://github.com/lukislp/piwatch/compare/v1.36.0...v1.37.0) (2026-08-17)
 
 

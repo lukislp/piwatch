@@ -1,3 +1,10 @@
+# [1.38.0](https://github.com/lukislp/piwatch/compare/v1.37.1...v1.38.0) (2026-08-20)
+
+
+### Features
+
+* **ml:** S4 rolling-origin cross-validation ([376e08c](https://github.com/lukislp/piwatch/commit/376e08c98ad159d8003c757bac0ba1d072212e70))
+
 ## [1.37.1](https://github.com/lukislp/piwatch/compare/v1.37.0...v1.37.1) (2026-08-20)
 
 

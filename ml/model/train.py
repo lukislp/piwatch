@@ -133,6 +133,14 @@ def main() -> None:
 
     Path("ml/mlruns").mkdir(parents=True, exist_ok=True)
     mlflow.set_tracking_uri(args.tracking_uri)
+    # set_experiment() alone lets MLflow default a new experiment's artifact
+    # store to ./mlruns relative to the current working directory -- NOT
+    # ml/mlruns/ next to the tracking DB, regardless of --tracking-uri.
+    # Running train.py from the repo root (the documented/normal way) leaks a
+    # stray top-level mlruns/ directory as a result. Creating the experiment
+    # explicitly with an artifact_location under ml/mlruns/ avoids that.
+    if mlflow.get_experiment_by_name(args.experiment) is None:
+        mlflow.create_experiment(args.experiment, artifact_location=Path("ml/mlruns/artifacts").resolve().as_uri())
     mlflow.set_experiment(args.experiment)
 
     cfg = TrainConfig(window_size=args.window_size, epochs=args.epochs, seed=args.seed)

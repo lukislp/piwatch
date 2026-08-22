@@ -1,3 +1,10 @@
+# [1.39.0](https://github.com/lukislp/piwatch/compare/v1.38.0...v1.39.0) (2026-08-22)
+
+
+### Features
+
+* own this repo's Flux GitOps wiring ([f8c9503](https://github.com/lukislp/piwatch/commit/f8c9503e202d12c27ae6d49e30861e21fc5a4070))
+
 # [1.38.0](https://github.com/lukislp/piwatch/compare/v1.37.1...v1.38.0) (2026-08-20)
 
 

@@ -1,0 +1,10 @@
+# Scans GHCR for new tags of this repo's image (.github/workflows/ci-cd.yml "docker-build-push"
+# job). Public package - no secretRef needed.
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: piwatch
+  namespace: flux-system
+spec:
+  image: ghcr.io/lukislp/piwatch
+  interval: 5m

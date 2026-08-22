@@ -1,0 +1,18 @@
+# Applies EXCLUSIVELY deploy/flux-deploy/ (this repo's curated Flux-managed subset - see that
+# folder's own kustomization.yaml for which files and why). Needs the shared reconciler ClusterRole
+# (homelab-infra's flux/01-reconciler-rbac.yaml) to include "daemonsets" - this repo's DaemonSet
+# (node-agent) is part of the managed subset, unlike the other onboarded apps.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: piwatch-deploy
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: piwatch
+  path: ./deploy/flux-deploy
+  prune: true
+  wait: true
+  timeout: 3m

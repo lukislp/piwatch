@@ -1,0 +1,14 @@
+# Selects the "newest" tag by SemVer - this repo's own semantic-release setup pushes plain
+# SemVer docker tags without a "v" prefix (the git tag itself is "vX.Y.Z", but the published
+# image tag is "X.Y.Z").
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: piwatch
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: piwatch
+  policy:
+    semver:
+      range: ">=0.0.0"

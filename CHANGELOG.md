@@ -1,3 +1,10 @@
+## [1.39.1](https://github.com/lukislp/piwatch/compare/v1.39.0...v1.39.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* run the backend as non-root ([408f2fd](https://github.com/lukislp/piwatch/commit/408f2fd1ed879db93edfa792ff1556d1d94ebc6b))
+
 # [1.39.0](https://github.com/lukislp/piwatch/compare/v1.38.0...v1.39.0) (2026-08-22)
 
 

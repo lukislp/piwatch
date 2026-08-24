@@ -1,3 +1,10 @@
+## [1.39.3](https://github.com/lukislp/piwatch/compare/v1.39.2...v1.39.3) (2026-08-24)
+
+
+### Performance Improvements
+
+* **ci:** native per-arch docker builds instead of QEMU emulation ([dd5f74e](https://github.com/lukislp/piwatch/commit/dd5f74e8760fc9e1ac505f21f51f0b342a7db1e1))
+
 ## [1.39.2](https://github.com/lukislp/piwatch/compare/v1.39.1...v1.39.2) (2026-08-24)
 
 

@@ -1,3 +1,10 @@
+## [1.39.2](https://github.com/lukislp/piwatch/compare/v1.39.1...v1.39.2) (2026-08-24)
+
+
+### Bug Fixes
+
+* **deploy:** acknowledge the node-agent's accepted privileged finding ([c7d3583](https://github.com/lukislp/piwatch/commit/c7d35836821bec0e2d00d9cd2b9a60673c05f84d))
+
 ## [1.39.1](https://github.com/lukislp/piwatch/compare/v1.39.0...v1.39.1) (2026-08-24)
 
 

@@ -19,6 +19,14 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./static
+# Non-root runtime user for the backend (numeric so runAsNonRoot can be
+# verified); nothing inside the image needs to be writable - the history db
+# lives on a volume. The node-agent DaemonSet overrides this back to root
+# explicitly: privileged capabilities are only effective for UID 0, and the
+# NVMe SMART ioctl needs them (see deploy/daemonset-node-agent.yaml).
+RUN useradd --uid 10001 --user-group --no-create-home piwatch
+ENV HOME=/tmp
+USER 10001
 EXPOSE 8000
 # Backend (default). The node-agent uses the same image with a different command
 # (see deploy/daemonset-node-agent.yaml).

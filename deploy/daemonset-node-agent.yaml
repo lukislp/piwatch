@@ -35,6 +35,11 @@ spec:
           # plain sysfs, only the SMART fields (wear %, power-on hours, ...) go missing.
           securityContext:
             privileged: true
+            # The shared image now defaults to UID 10001 (see the Dockerfile);
+            # the agent must stay root explicitly - a privileged container's
+            # capabilities are only effective for UID 0, and the NVMe ioctl
+            # needs them.
+            runAsUser: 0
             # Explicit, not just implied by privileged:true: the previously-live manifest had
             # allowPrivilegeEscalation:false set, and since apply only adds/changes fields it
             # mentions, that stale false would otherwise survive the merge - combined with
@@ -60,6 +65,10 @@ spec:
           livenessProbe:
             httpGet: {path: /healthz, port: 9101}
             periodSeconds: 30
+          readinessProbe:
+            httpGet: {path: /healthz, port: 9101}
+            initialDelaySeconds: 3
+            periodSeconds: 10
       volumes:
         - {name: sys, hostPath: {path: /sys}}
         - {name: proc, hostPath: {path: /proc}}

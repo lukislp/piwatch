@@ -27,16 +27,30 @@ spec:
                 topologyKey: kubernetes.io/hostname
                 labelSelector:
                   matchLabels: {app: piwatch}
+      initContainers:
+        # The history hostPath is created (and was previously written) by
+        # root; chown on every start - idempotent, one small sqlite db - so
+        # the non-root backend below can keep writing it. The only root in
+        # this pod.
+        - name: fix-history-ownership
+          image: busybox:1.36.1
+          command: ["chown", "-R", "10001:10001", "/data"]
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - {name: history, mountPath: /data}
       containers:
         - name: piwatch
           image: ghcr.io/lukislp/piwatch:1.39.0 # {"$imagepolicy": "flux-system:piwatch"}
-          # No runAsNonRoot: the image has no USER directive (runs as root) - enforcing it
-          # retroactively would crash without an accompanying Dockerfile change (+rebuild).
-          # allowPrivilegeEscalation/capabilities are safe independently of that, because the
-          # app needs neither setuid binaries nor special Linux capabilities.
+          # The image runs as a dedicated UID-10001 user since the same-named
+          # Dockerfile change; declared here so the posture is enforced, not
+          # incidental.
           securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
             allowPrivilegeEscalation: false
             capabilities: {drop: ["ALL"]}
+            seccompProfile: {type: RuntimeDefault}
           ports:
             - containerPort: 8000
           env:

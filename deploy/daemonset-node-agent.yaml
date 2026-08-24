@@ -9,9 +9,7 @@ metadata:
     # privileged-container finding with its reason instead of leaving it
     # open. The securityContext comments below hold the full story.
     autodoc.homelab/accept-privileged-container: >-
-      NVMe SMART ioctls on /dev/nvme0 need privileged root - verified
-      live: EPERM as plain root; everything else the agent reads is
-      unprivileged sysfs/procfs
+      NVMe SMART ioctls on /dev/nvme0 need privileged root - verified live: EPERM as plain root; everything else the agent reads is unprivileged sysfs/procfs
 spec:
   selector:
     matchLabels: {app: piwatch-node-agent}
@@ -30,7 +28,7 @@ spec:
           operator: Exists
       containers:
         - name: agent
-          image: ghcr.io/lukislp/piwatch:1.39.1 # {"$imagepolicy": "flux-system:piwatch"}
+          image: ghcr.io/lukislp/piwatch:1.39.2 # {"$imagepolicy": "flux-system:piwatch"}
           command: ["uvicorn", "app.node_agent:app", "--host", "0.0.0.0", "--port", "9101"]
           # privileged: true is required ONLY for the NVMe SMART reader (node_agent.py's
           # read_nvme_smart(), via nvme-cli): the NVMe admin passthrough ioctl it issues is

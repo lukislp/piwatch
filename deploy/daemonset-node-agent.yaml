@@ -4,6 +4,14 @@ metadata:
   name: piwatch-node-agent
   namespace: monitoring
   labels: {app: piwatch-node-agent}
+  annotations:
+    # Read by homelab-autodoc's findings engine: acknowledges the
+    # privileged-container finding with its reason instead of leaving it
+    # open. The securityContext comments below hold the full story.
+    autodoc.homelab/accept-privileged-container: >-
+      NVMe SMART ioctls on /dev/nvme0 need privileged root - verified
+      live: EPERM as plain root; everything else the agent reads is
+      unprivileged sysfs/procfs
 spec:
   selector:
     matchLabels: {app: piwatch-node-agent}

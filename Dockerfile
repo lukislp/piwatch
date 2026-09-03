@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---------- Stage 2: Backend runtime (arm64 + amd64 compatible) ----------
-FROM python:3.12-slim
+FROM python:3.14-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PIWATCH_STATIC_DIR=/app/static
 # nvme-cli: only used by the node-agent's NVMe SMART reader (node_agent.py), and only

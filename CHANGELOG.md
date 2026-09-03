@@ -1,3 +1,10 @@
+## [1.39.4](https://github.com/lukislp/piwatch/compare/v1.39.3...v1.39.4) (2026-09-03)
+
+
+### Bug Fixes
+
+* **ci:** add Dependabot for github-actions, npm, pip, docker ([45bf9de](https://github.com/lukislp/piwatch/commit/45bf9de175b2d23e92660438837a158ef5c23ae8))
+
 ## [1.39.3](https://github.com/lukislp/piwatch/compare/v1.39.2...v1.39.3) (2026-08-24)
 
 

@@ -1,3 +1,18 @@
+## [1.39.5](https://github.com/lukislp/piwatch/compare/v1.39.4...v1.39.5) (2026-09-04)
+
+
+### Bug Fixes
+
+* **ci:** bump actions/setup-node from 5 to 7 ([bd2018d](https://github.com/lukislp/piwatch/commit/bd2018db15d7b16c9f58a08b0d8853e30440fb9d))
+* **ci:** bump aquasecurity/trivy-action ([97cbb5d](https://github.com/lukislp/piwatch/commit/97cbb5df1d68c642a09cccfa2d74eec2c785205a))
+* **ci:** bump docker/setup-buildx-action from 4.2.0 to 4.3.0 ([a38808c](https://github.com/lukislp/piwatch/commit/a38808c6c908420ff77f6896b86ccc8205b98c07))
+* **deps:** update fastapi requirement in /backend ([7e42046](https://github.com/lukislp/piwatch/commit/7e420464c36cf1aeae0168aa96f6e58cfe402dad))
+* **deps:** update httpx requirement from >=0.27 to >=0.28.1 in /backend ([be0c6a8](https://github.com/lukislp/piwatch/commit/be0c6a80a79bfc98eba1c30bd4d284ec2b9bd270))
+* **deps:** update httpx requirement from >=0.27 to >=0.28.1 in /ml ([2da4371](https://github.com/lukislp/piwatch/commit/2da4371980c1b58a43fe7393094ac94c10397a66))
+* **deps:** update kubernetes-asyncio requirement in /backend ([d710163](https://github.com/lukislp/piwatch/commit/d710163139d990d8535e2a1ebd59437a6442251f))
+* **deps:** update pyyaml requirement from >=6.0 to >=6.0.3 in /backend ([1a0a975](https://github.com/lukislp/piwatch/commit/1a0a975b544fc618c935c58f3af6fa64803c9872))
+* **deps:** update uvicorn requirement in /backend ([2762193](https://github.com/lukislp/piwatch/commit/27621939602460f44eea0b7e980c8cd366887101))
+
 ## [1.39.4](https://github.com/lukislp/piwatch/compare/v1.39.3...v1.39.4) (2026-09-03)
 
 

@@ -1,3 +1,11 @@
+## [1.39.7](https://github.com/lukislp/piwatch/compare/v1.39.6...v1.39.7) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** bump react and react-dom to 19.2.8 together in /frontend ([30dbfe0](https://github.com/lukislp/piwatch/commit/30dbfe0f27c3837366ea4103f569952738076476))
+* **deps:** bump the dev group (vite, @vitejs/plugin-react, typescript) in /frontend ([8e96e9f](https://github.com/lukislp/piwatch/commit/8e96e9f7de262b8a60e90b0b3032dee5e3533002))
+
 ## [1.39.6](https://github.com/lukislp/piwatch/compare/v1.39.5...v1.39.6) (2026-09-04)
 
 

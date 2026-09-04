@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 import { NodeChart, Dot, StatusBadge, Tile, useBalancedTileColumns } from "./components";
 import { getToken } from "./store";
 import { STATUS, seriesColor, type Mode } from "./theme";

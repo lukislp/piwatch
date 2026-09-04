@@ -1,3 +1,10 @@
+## [1.39.6](https://github.com/lukislp/piwatch/compare/v1.39.5...v1.39.6) (2026-09-04)
+
+
+### Bug Fixes
+
+* **ci:** ignore base image major bumps in Dependabot ([3e82108](https://github.com/lukislp/piwatch/commit/3e821080bae4b5bafcefc76d4708985a89386aae))
+
 ## [1.39.5](https://github.com/lukislp/piwatch/compare/v1.39.4...v1.39.5) (2026-09-04)
 
 

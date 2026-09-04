@@ -79,6 +79,23 @@ jobs:
       - run: pip install pip-audit
       - run: pip-audit -r backend/requirements.txt
 
+  # ml/ is a separate, standalone Python project (its own requirements.txt, no shared
+  # dependency with backend/) - not wired into docker-build-push (no image ships it), which is
+  # why it previously had no CI coverage at all: a green Dependabot PR against
+  # ml/requirements.txt was proving nothing (2026-09-05).
+  test-ml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ml/requirements.txt
+      - run: pip install -r ml/requirements.txt
+      - run: pip install pytest
+      - run: python -m pytest ml/tests/
+
   test-k8s-manifests:
     runs-on: ubuntu-latest
     container:
@@ -93,7 +110,7 @@ jobs:
   build:
     # No implicit stage-sequencing under GitHub's DAG model (unlike GitLab) - wait for
     # every test job explicitly.
-    needs: [test-backend, test-frontend, test-security, test-k8s-manifests]
+    needs: [test-backend, test-frontend, test-security, test-k8s-manifests, test-ml]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1

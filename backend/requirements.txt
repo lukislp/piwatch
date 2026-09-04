@@ -2,4 +2,4 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 kubernetes_asyncio>=29.0
 httpx>=0.28.1
-pyyaml>=6.0
+pyyaml>=6.0.3

@@ -1,3 +1,10 @@
+## [1.39.8](https://github.com/lukislp/piwatch/compare/v1.39.7...v1.39.8) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** bump recharts from 2.15.4 to 3.10.1 in /frontend ([2e86cee](https://github.com/lukislp/piwatch/commit/2e86ceec15747203457ae6f7874ac2b0e14abe58))
+
 ## [1.39.7](https://github.com/lukislp/piwatch/compare/v1.39.6...v1.39.7) (2026-09-04)
 
 

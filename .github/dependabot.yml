@@ -30,3 +30,13 @@ updates:
       interval: weekly
     commit-message:
       prefix: "fix(docker)"
+    # Base image majors (python 3.12->3.14, node 20->26) are handled deliberately on our own
+    # schedule, not via Dependabot. 3.12->3.14 is a semver-minor bump per Dependabot's
+    # versioning (python's scheme has no major segment change here), so both minor and major
+    # are ignored for python; node's majors are ignored the normal way. Patch updates for both
+    # keep flowing.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

@@ -1,4 +1,4 @@
-fastapi>=0.110
+fastapi>=0.141.1
 uvicorn[standard]>=0.29
 kubernetes_asyncio>=36.1.0
 httpx>=0.28.1

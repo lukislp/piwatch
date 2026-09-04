@@ -1,3 +1,11 @@
+## [1.39.9](https://github.com/lukislp/piwatch/compare/v1.39.8...v1.39.9) (2026-09-04)
+
+
+### Bug Fixes
+
+* **ci:** add a test-ml job so /ml dependency bumps are actually verified ([90950c5](https://github.com/lukislp/piwatch/commit/90950c53f87b7e329b8f7e24825aa179a3b013bb))
+* **deps:** batch the /ml dependency updates (2026-09) ([50d92b7](https://github.com/lukislp/piwatch/commit/50d92b798065ce5f68e236c595c6bcf49bdb83a5)), closes [#76](https://github.com/lukislp/piwatch/issues/76) [#77](https://github.com/lukislp/piwatch/issues/77) [#78](https://github.com/lukislp/piwatch/issues/78) [#79](https://github.com/lukislp/piwatch/issues/79)
+
 ## [1.39.8](https://github.com/lukislp/piwatch/compare/v1.39.7...v1.39.8) (2026-09-04)
 
 

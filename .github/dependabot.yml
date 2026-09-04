@@ -14,6 +14,13 @@ updates:
     groups:
       dev:
         dependency-type: development
+      # react and react-dom (plus their @types) must move together - a solo major bump on
+      # either one alone triggers an ERESOLVE peer-dependency conflict. Group them so
+      # Dependabot always proposes them in one PR.
+      react:
+        patterns:
+          - "react*"
+          - "@types/react*"
     commit-message:
       prefix: "fix(deps)"
   - package-ecosystem: pip

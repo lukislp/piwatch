@@ -1,3 +1,10 @@
+## [1.40.1](https://github.com/lukislp/piwatch/compare/v1.40.0...v1.40.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **node-agent:** read /proc/1/mounts, not self/mounts, for root detection ([147163d](https://github.com/lukislp/piwatch/commit/147163d514705f1e5df7f53bc6c68f448ad43df2))
+
 # [1.40.0](https://github.com/lukislp/piwatch/compare/v1.39.10...v1.40.0) (2026-09-05)
 
 

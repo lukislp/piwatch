@@ -1,9 +1,10 @@
 """Tiny per-node hardware agent, run as a DaemonSet on every Pi.
 
 Exposes GET /metrics with CPU temperature, load, memory, disk, uptime,
-network throughput, NVMe health and the Pi firmware's under-voltage flag.
-Reads the host's /sys and /proc, which are mounted read-only into the pod
-(hostPath). Runs from the same container image as the backend:
+network throughput, NVMe health, SD/eMMC card info, and the Pi firmware's
+under-voltage flag. Reads the host's /sys and /proc, which are mounted
+read-only into the pod (hostPath). Runs from the same container image as
+the backend:
 
     uvicorn app.node_agent:app --host 0.0.0.0 --port 9101
 
@@ -11,9 +12,13 @@ NVMe SMART data (wear level, power-on hours, ...) additionally needs
 `nvme-cli` and raw access to the NVMe admin character device, which the
 kernel only grants to a privileged container -- see the securityContext
 and /dev mount in deploy/daemonset-node-agent.yaml. Everything else here
-(temperature, model, capacity, under-voltage) works from unprivileged
-sysfs reads alone and degrades to None when unavailable (e.g. no PoE+
-M.2 HAT, or running locally on a dev machine).
+(temperature, model, capacity, under-voltage, SD card info) works from
+unprivileged sysfs reads alone and degrades to None/{} when unavailable
+(e.g. no PoE+ M.2 HAT, not booting from SD, or running locally on a dev
+machine). SD cards implement neither ATA/SCSI SMART nor an NVMe-style
+wear-level log at all, so unlike NVMe there is no privileged path that
+would unlock a wear percentage for them -- see read_sd_info()/
+read_sd_bytes()/read_root_readonly() for the best available proxies.
 """
 from __future__ import annotations
 
@@ -129,6 +134,132 @@ def read_nvme_temp_c() -> float | None:
             return round(int(f.read().strip()) / 1000, 1)
     except (OSError, ValueError):
         return None
+
+
+def _root_device() -> str | None:
+    """Kernel device name backing the host's root filesystem (e.g. "mmcblk0p2",
+    "nvme0n1p2", "sda1"), read from /proc/mounts -- used to auto-detect whether
+    a node boots from an SD/eMMC card, NVMe, or something else, instead of
+    hardcoding a device name that varies across Pi models/storage setups."""
+    try:
+        with open(f"{PROC}/mounts") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4 and parts[1] == "/":
+                    return parts[0].removeprefix("/dev/")
+    except OSError:
+        pass
+    return None
+
+
+def read_root_readonly() -> bool | None:
+    """True if the host's root filesystem is currently mounted read-only -- the
+    classic "SD card is dying" symptom on a Pi: the kernel force-remounts root
+    read-only after uncorrectable storage I/O errors, well before the node
+    would otherwise show any other sign of trouble. Not SD-specific (any root
+    device can hit this), but paired with the SD wear proxies below since SD
+    cards are by far the most common trigger on a Pi. None if /proc/mounts or
+    the root entry within it couldn't be read at all."""
+    try:
+        with open(f"{PROC}/mounts") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4 and parts[1] == "/":
+                    return "ro" in parts[3].split(",")
+    except OSError:
+        pass
+    return None
+
+
+def _sd_block_device() -> str | None:
+    """Base mmcblk device (e.g. "mmcblk0") backing the host's root filesystem,
+    or None if root isn't on an SD/eMMC card at all (NVMe- or USB-booted
+    nodes)."""
+    dev = _root_device()
+    if not dev or not dev.startswith("mmcblk"):
+        return None
+    # mmc partitions always use a literal "p" separator (mmcblk0p2), unlike
+    # sd*/nvme naming, because the base device name itself ends in a digit.
+    return dev.split("p")[0]
+
+
+def read_sd_info() -> dict:
+    """Identity of the SD/eMMC card backing root, from its sysfs mmc_card
+    attributes -- unprivileged, and (unlike NVMe SMART/wear-level logs) works
+    for genuine SD cards too: SD/MMC cards do not implement ATA/SCSI SMART or
+    an NVMe-style wear-level log at all, so there is no percent-used figure to
+    read here. "sd_manufacture_date" (the card's mm/yyyy manufacturing date)
+    is the closest thing to an age/wear proxy this hardware exposes on its
+    own -- combine with read_sd_bytes()'s cumulative write volume and
+    read_root_readonly()'s failure signal for a fuller picture."""
+    dev = _sd_block_device()
+    if not dev:
+        return {}
+    out: dict = {}
+    base = f"{SYS}/block/{dev}/device"
+    for attr, key in (
+        ("name", "sd_model"),
+        ("serial", "sd_serial"),
+        ("date", "sd_manufacture_date"),
+        ("type", "sd_type"),
+    ):
+        try:
+            with open(f"{base}/{attr}") as f:
+                out[key] = f.read().strip()
+        except OSError:
+            continue
+    try:
+        with open(f"{SYS}/block/{dev}/size") as f:
+            out["sd_capacity_bytes"] = int(f.read().strip()) * 512  # sysfs "size" is in 512B sectors
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+def read_sd_bytes() -> tuple[int, int] | None:
+    """Cumulative (bytes_read, bytes_written) for the SD/eMMC device backing
+    root, from /sys/block/<dev>/stat (kernel block-layer stat format -- the
+    sector unit there is always 512 bytes regardless of the device's real
+    block size, see https://www.kernel.org/doc/Documentation/block/stat.txt).
+    None if root isn't on an SD/eMMC card, or the sysfs file isn't readable.
+    Total bytes written over time is the closest available wear proxy for a
+    device with no wear-level register of its own."""
+    dev = _sd_block_device()
+    if not dev:
+        return None
+    try:
+        with open(f"{SYS}/block/{dev}/stat") as f:
+            fields = f.read().split()
+        return int(fields[2]) * 512, int(fields[6]) * 512
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+# Previous (timestamp, bytes_read, bytes_written) sample -- same derive-a-rate-from-a-
+# cumulative-counter approach as _net_io_rate()/_nvme_io_rate(), see their comments for
+# why a single process-wide variable is enough (one node-agent monitors one root device).
+_last_sd_io: tuple[float, int, int] | None = None
+
+
+def _sd_io_rate(read_bytes: int | None, write_bytes: int | None) -> dict:
+    """Bytes/s read+written since the previous /metrics call. Empty on the
+    first call, or when read_sd_bytes() found nothing to sample."""
+    global _last_sd_io
+    if read_bytes is None or write_bytes is None:
+        return {}
+    now_ = time.monotonic()
+    prev = _last_sd_io
+    _last_sd_io = (now_, read_bytes, write_bytes)
+    if prev is None:
+        return {}
+    prev_t, prev_read, prev_write = prev
+    elapsed = now_ - prev_t
+    if elapsed <= 0:
+        return {}
+    return {
+        "sd_read_bytes_per_s": round(max(0, read_bytes - prev_read) / elapsed),
+        "sd_write_bytes_per_s": round(max(0, write_bytes - prev_write) / elapsed),
+    }
 
 
 def read_nvme_info() -> dict:
@@ -316,12 +447,15 @@ def metrics() -> dict:
         "uptime_s": read_uptime_s(),
         "nvme_temp_c": read_nvme_temp_c(),
         "undervoltage": read_undervoltage(),
+        "root_readonly": read_root_readonly(),
     }
     payload.update(read_nvme_info())
     smart = read_nvme_smart()
     payload.update(smart)
     payload.update(read_nvme_ctrl_info())
     payload.update(_nvme_io_rate(smart.get("nvme_data_units_read"), smart.get("nvme_data_units_written")))
+    payload.update(read_sd_info())
+    payload.update(_sd_io_rate(*(read_sd_bytes() or (None, None))))
     net = read_net_bytes()
     payload.update(_net_io_rate(*(net or (None, None))))
     return payload

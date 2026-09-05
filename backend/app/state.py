@@ -24,6 +24,7 @@ CHECK_HISTORY_LEN = 500
 NODE_HISTORY_FIELDS = (
     "cpu_pct", "mem_pct", "temp_c",
     "nvme_read_bytes_per_s", "nvme_write_bytes_per_s",
+    "sd_read_bytes_per_s", "sd_write_bytes_per_s",
     "net_rx_bytes_per_s", "net_tx_bytes_per_s",
 )
 

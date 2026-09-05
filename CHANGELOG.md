@@ -1,3 +1,10 @@
+## [1.40.2](https://github.com/lukislp/piwatch/compare/v1.40.1...v1.40.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* **frontend:** include SD throughput fields in the live history point ([a631834](https://github.com/lukislp/piwatch/commit/a631834bff50d758358caf2e10930f7daf587ac5))
+
 ## [1.40.1](https://github.com/lukislp/piwatch/compare/v1.40.0...v1.40.1) (2026-09-05)
 
 

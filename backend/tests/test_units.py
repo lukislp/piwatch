@@ -360,13 +360,32 @@ def test_nvme_io_rate_returns_empty_when_counters_unavailable(monkeypatch):
 
 
 def _write_mounts(proc_dir, device: str, options: str = "rw,noatime"):
-    """Minimal /proc/mounts with one root entry plus a noise line -- enough for
-    _root_device()/read_root_readonly(), which only look at the "/" mountpoint."""
-    proc_dir.mkdir(parents=True, exist_ok=True)
-    (proc_dir / "mounts").write_text(
+    """Minimal /proc/1/mounts (PID 1, not plain "mounts" == "self/mounts" --
+    see _host_mounts_path()'s docstring for why that distinction matters) with
+    one root entry plus a noise line -- enough for _root_device()/
+    read_root_readonly(), which only look at the "/" mountpoint."""
+    pid1 = proc_dir / "1"
+    pid1.mkdir(parents=True, exist_ok=True)
+    (pid1 / "mounts").write_text(
         f"/dev/{device} / ext4 {options} 0 0\n"
         "tmpfs /dev/shm tmpfs rw,nosuid,nodev 0 0\n"
     )
+
+
+def test_root_device_reads_pid1_mounts_not_self_mounts(tmp_path, monkeypatch):
+    """Regression test for a real bug found live on an SD-booted Pi: plain
+    "mounts" is always "self/mounts", which even through a bind-mounted host
+    /proc resolves to the READING container's own overlay rootfs, not the
+    host's -- confirmed live (grep on /host/proc/mounts showed the node-agent
+    container's own containerd overlay mount, not the Pi's real /dev/mmcblk0p2).
+    A decoy plain "mounts" file here must be ignored in favor of "1/mounts"
+    (PID 1 = host init, see _host_mounts_path())."""
+    proc_dir = tmp_path / "proc"
+    proc_dir.mkdir(parents=True)
+    (proc_dir / "mounts").write_text("overlay / overlay rw,relatime 0 0\n")
+    _write_mounts(proc_dir, "mmcblk0p2")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    assert node_agent._root_device() == "mmcblk0p2"
 
 
 def test_root_device_reads_root_mountpoint_from_proc_mounts(tmp_path, monkeypatch):

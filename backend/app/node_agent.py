@@ -136,13 +136,32 @@ def read_nvme_temp_c() -> float | None:
         return None
 
 
+def _host_mounts_path() -> str:
+    """Path to the HOST's real /proc/mounts, as seen through the bind-mounted
+    PROC directory.
+
+    Deliberately "1/mounts", not the plain "mounts" (== "self/mounts") every
+    other read_*() in this module would reach for: /proc/mounts is always a
+    magic symlink resolved for the READING process, so even through a
+    bind-mounted host /proc it resolves to this container's own mount
+    namespace (its overlayfs rootfs) rather than the host's -- confirmed live
+    on a real SD-booted Pi, where this bug made SD-card detection silently
+    find nothing at all. "1" (the host's init/systemd, always in the initial
+    mount namespace) sidesteps that: procfs resolves a plain numeric PID
+    within the procfs instance's own (here: the host's) PID namespace, no
+    "self"-style remapping to the caller involved -- the same technique
+    Prometheus node_exporter uses for its filesystem collector."""
+    return f"{PROC}/1/mounts"
+
+
 def _root_device() -> str | None:
     """Kernel device name backing the host's root filesystem (e.g. "mmcblk0p2",
-    "nvme0n1p2", "sda1"), read from /proc/mounts -- used to auto-detect whether
-    a node boots from an SD/eMMC card, NVMe, or something else, instead of
-    hardcoding a device name that varies across Pi models/storage setups."""
+    "nvme0n1p2", "sda1"), read from the host's real /proc/mounts (see
+    _host_mounts_path()) -- used to auto-detect whether a node boots from an
+    SD/eMMC card, NVMe, or something else, instead of hardcoding a device
+    name that varies across Pi models/storage setups."""
     try:
-        with open(f"{PROC}/mounts") as f:
+        with open(_host_mounts_path()) as f:
             for line in f:
                 parts = line.split()
                 if len(parts) >= 4 and parts[1] == "/":
@@ -161,7 +180,7 @@ def read_root_readonly() -> bool | None:
     cards are by far the most common trigger on a Pi. None if /proc/mounts or
     the root entry within it couldn't be read at all."""
     try:
-        with open(f"{PROC}/mounts") as f:
+        with open(_host_mounts_path()) as f:
             for line in f:
                 parts = line.split()
                 if len(parts) >= 4 and parts[1] == "/":

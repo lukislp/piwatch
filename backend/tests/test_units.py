@@ -359,6 +359,126 @@ def test_nvme_io_rate_returns_empty_when_counters_unavailable(monkeypatch):
     assert node_agent._nvme_io_rate(None, None) == {}
 
 
+def _write_mounts(proc_dir, device: str, options: str = "rw,noatime"):
+    """Minimal /proc/mounts with one root entry plus a noise line -- enough for
+    _root_device()/read_root_readonly(), which only look at the "/" mountpoint."""
+    proc_dir.mkdir(parents=True, exist_ok=True)
+    (proc_dir / "mounts").write_text(
+        f"/dev/{device} / ext4 {options} 0 0\n"
+        "tmpfs /dev/shm tmpfs rw,nosuid,nodev 0 0\n"
+    )
+
+
+def test_root_device_reads_root_mountpoint_from_proc_mounts(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    _write_mounts(proc_dir, "mmcblk0p2")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    assert node_agent._root_device() == "mmcblk0p2"
+
+
+def test_root_device_returns_none_when_mounts_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(node_agent, "PROC", str(tmp_path / "no-proc"))
+    assert node_agent._root_device() is None
+
+
+def test_read_root_readonly_true_when_ro_flag_present(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    _write_mounts(proc_dir, "mmcblk0p2", options="ro,noatime")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    assert node_agent.read_root_readonly() is True
+
+
+def test_read_root_readonly_false_when_mounted_rw(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    _write_mounts(proc_dir, "mmcblk0p2", options="rw,noatime")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    assert node_agent.read_root_readonly() is False
+
+
+def test_read_root_readonly_none_when_mounts_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(node_agent, "PROC", str(tmp_path / "no-proc"))
+    assert node_agent.read_root_readonly() is None
+
+
+def test_sd_block_device_strips_partition_suffix(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    _write_mounts(proc_dir, "mmcblk0p2")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    assert node_agent._sd_block_device() == "mmcblk0"
+
+
+def test_sd_block_device_none_when_root_is_not_mmc(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    _write_mounts(proc_dir, "nvme0n1p2")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    assert node_agent._sd_block_device() is None
+
+
+def test_read_sd_info_extracts_identity_and_capacity(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    sys_dir = tmp_path / "sys"
+    _write_mounts(proc_dir, "mmcblk0p2")
+    device = sys_dir / "block" / "mmcblk0" / "device"
+    device.mkdir(parents=True)
+    (device / "name").write_text("SL16G\n")
+    (device / "serial").write_text("0x12345678\n")
+    (device / "date").write_text("08/2023\n")
+    (device / "type").write_text("SD\n")
+    (sys_dir / "block" / "mmcblk0" / "size").write_text("31116288")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    assert node_agent.read_sd_info() == {
+        "sd_model": "SL16G",
+        "sd_serial": "0x12345678",
+        "sd_manufacture_date": "08/2023",
+        "sd_type": "SD",
+        "sd_capacity_bytes": 31116288 * 512,
+    }
+
+
+def test_read_sd_info_returns_empty_dict_when_root_not_on_sd(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    _write_mounts(proc_dir, "nvme0n1p2")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    assert node_agent.read_sd_info() == {}
+
+
+def test_read_sd_bytes_reads_stat_sectors_as_bytes(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    sys_dir = tmp_path / "sys"
+    _write_mounts(proc_dir, "mmcblk0p2")
+    block = sys_dir / "block" / "mmcblk0"
+    block.mkdir(parents=True)
+    # kernel block stat: read I/Os, read merges, read sectors, read ticks,
+    # write I/Os, write merges, write sectors, write ticks, ...
+    (block / "stat").write_text("100 0 2000 50 200 0 4000 80 0 0 0\n")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    monkeypatch.setattr(node_agent, "SYS", str(sys_dir))
+    assert node_agent.read_sd_bytes() == (2000 * 512, 4000 * 512)
+
+
+def test_read_sd_bytes_none_when_root_not_on_sd(tmp_path, monkeypatch):
+    proc_dir = tmp_path / "proc"
+    _write_mounts(proc_dir, "nvme0n1p2")
+    monkeypatch.setattr(node_agent, "PROC", str(proc_dir))
+    assert node_agent.read_sd_bytes() is None
+
+
+def test_sd_io_rate_computes_bytes_per_second_between_samples(monkeypatch):
+    monkeypatch.setattr(node_agent, "_last_sd_io", None)
+    times = iter([100.0, 105.0])
+    monkeypatch.setattr(node_agent, "time", types.SimpleNamespace(monotonic=lambda: next(times)))
+
+    assert node_agent._sd_io_rate(10_000, 20_000) == {}  # seeds the first sample
+    result = node_agent._sd_io_rate(10_500, 21_000)  # +500 read, +1000 write over 5s
+    assert result == {"sd_read_bytes_per_s": 100, "sd_write_bytes_per_s": 200}
+
+
+def test_sd_io_rate_returns_empty_when_counters_unavailable(monkeypatch):
+    monkeypatch.setattr(node_agent, "_last_sd_io", None)
+    assert node_agent._sd_io_rate(None, None) == {}
+
+
 def _write_net_iface(sys_dir, name: str, physical: bool, rx: int | None = None, tx: int | None = None):
     iface = sys_dir / "class" / "net" / name
     stats = iface / "statistics"
@@ -501,6 +621,51 @@ def test_metrics_endpoint_includes_nvme_and_power_data_when_present(tmp_path, mo
     assert second["nvme_write_bytes_per_s"] == round(200 * 512_000 / 5)
 
 
+def test_metrics_endpoint_includes_sd_card_data_when_present(tmp_path, monkeypatch):
+    """End-to-end: /proc/mounts identifying an SD-card root device, plus its sysfs
+    identity attributes and block stat, all merge into one /metrics payload. A
+    second poll additionally exercises the read/write throughput rate."""
+    from fastapi.testclient import TestClient
+
+    _seed_full_node_agent_fs(tmp_path, monkeypatch)
+    monkeypatch.setattr(node_agent, "_last_sd_io", None)
+    proc_dir = tmp_path / "proc"
+    _write_mounts(proc_dir, "mmcblk0p2")
+    sys_dir = tmp_path / "sys"
+    device = sys_dir / "block" / "mmcblk0" / "device"
+    device.mkdir(parents=True)
+    (device / "name").write_text("SL16G")
+    (device / "date").write_text("08/2023")
+    (device / "type").write_text("SD")
+    (sys_dir / "block" / "mmcblk0" / "size").write_text("31116288")
+    stat = sys_dir / "block" / "mmcblk0" / "stat"
+    sectors = {"read": 2000, "written": 4000}
+
+    def write_stat():
+        stat.write_text(f"100 0 {sectors['read']} 50 200 0 {sectors['written']} 80 0 0 0\n")
+
+    write_stat()
+    times = iter([100.0, 105.0])
+    monkeypatch.setattr(node_agent, "time", types.SimpleNamespace(monotonic=lambda: next(times)))
+
+    with TestClient(node_agent.app) as client:
+        first = client.get("/metrics").json()
+        sectors["read"] += 100  # +100 sectors (51200 bytes) over the 5s between samples
+        sectors["written"] += 200
+        write_stat()
+        second = client.get("/metrics").json()
+
+    assert first["sd_model"] == "SL16G"
+    assert first["sd_manufacture_date"] == "08/2023"
+    assert first["sd_type"] == "SD"
+    assert first["sd_capacity_bytes"] == 31116288 * 512
+    assert first["root_readonly"] is False
+    assert "sd_read_bytes_per_s" not in first  # first poll: no prior sample to diff against
+
+    assert second["sd_read_bytes_per_s"] == round(100 * 512 / 5)
+    assert second["sd_write_bytes_per_s"] == round(200 * 512 / 5)
+
+
 def test_metrics_endpoint_includes_network_throughput_on_second_poll(tmp_path, monkeypatch):
     """Same two-poll shape as the NVMe throughput test: the rate only exists
     once there are two samples to diff. nvme-cli isn't mocked here and isn't
@@ -559,6 +724,7 @@ def test_metrics_endpoint_degrades_gracefully_when_everything_missing(
         "uptime_s": None,
         "nvme_temp_c": None,
         "undervoltage": None,
+        "root_readonly": None,
     }
 
 

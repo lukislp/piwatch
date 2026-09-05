@@ -13,6 +13,11 @@ from ..state import ClusterState
 
 NODES = ["pi-master", "pi-worker-1", "pi-worker-2"]
 
+# Mirrors a real mixed fleet: one node (the control-plane Pi in the real cluster this demo
+# is modeled on) still boots from an SD card, the rest have been upgraded to NVMe -- so the
+# demo exercises both the NVMe tab and the SD Card tab, not just one of them.
+SD_NODE = NODES[0]
+
 # (namespace, pod name, node, container image)
 PODS = [
     ("kube-system", "traefik-5d4f9", "pi-master", "traefik:v3.0"),
@@ -602,6 +607,17 @@ async def run(state: ClusterState):
     nvme_reads = {n: rng.randint(500_000, 2_000_000) for n in NODES}
     nvme_writes = {n: rng.randint(500_000, 2_000_000) for n in NODES}
 
+    # --- SD card: static identity + throughput, SD_NODE only (see its comment above) ---
+    sd_static = {
+        "sd_model": "Demo SL16G",
+        "sd_type": "SD",
+        "sd_serial": "0xDEC0DED0",
+        "sd_manufacture_date": "03/2022",
+        "sd_capacity_bytes": 16 * 1000**3,
+    }
+    sd_read_rate = _Walker(rng.uniform(0.02, 0.1) * 1024**2, 0, 5 * 1024**2, 0.3 * 1024**2)
+    sd_write_rate = _Walker(rng.uniform(0.01, 0.05) * 1024**2, 0, 5 * 1024**2, 0.2 * 1024**2)
+
     # --- network throughput per node ---
     net_rx_rate = {n: _Walker(rng.uniform(0.1, 1) * 1024**2, 0, 30 * 1024**2, 3 * 1024**2) for n in NODES}
     net_tx_rate = {n: _Walker(rng.uniform(0.05, 0.5) * 1024**2, 0, 15 * 1024**2, 1.5 * 1024**2) for n in NODES}
@@ -636,18 +652,34 @@ async def run(state: ClusterState):
                     "mem_bytes": int(NODE_MEM_BYTES * mem_pct / 100),
                 },
             )
-            read_bps = nvme_read_rate[n].next()
-            write_bps = nvme_write_rate[n].next()
-            nvme_reads[n] += int(read_bps * 5 / 512_000)  # 5s tick, bytes -> "data units"
-            nvme_writes[n] += int(write_bps * 5 / 512_000)
-            wear = nvme_wear[n].next()
-            state.record_hardware(
-                n,
-                {
-                    "temp_c": temp[n].next(),
-                    "disk_used_pct": disk[n].next(),
-                    "load1": round(cpu[n].value / 25, 2),
-                    "uptime_s": int(time.time() - state.started_at) + 86400 * 12,
+            hw = {
+                "temp_c": temp[n].next(),
+                "disk_used_pct": disk[n].next(),
+                "load1": round(cpu[n].value / 25, 2),
+                "uptime_s": int(time.time() - state.started_at) + 86400 * 12,
+                "net_rx_bytes_per_s": int(net_rx_rate[n].next()),
+                "net_tx_bytes_per_s": int(net_tx_rate[n].next()),
+                "undervoltage": False,
+                "root_readonly": False,
+            }
+            if n == SD_NODE:
+                # No NVMe fields for this node -- a real mmcblk-booted Pi has none either,
+                # and pages.tsx's NVMe/SD Card tabs both key their per-node rows off field
+                # presence (nvme_temp_c / sd_model), not a separate "which storage" flag.
+                sd_read_bps = sd_read_rate.next()
+                sd_write_bps = sd_write_rate.next()
+                hw.update({
+                    "sd_read_bytes_per_s": int(sd_read_bps),
+                    "sd_write_bytes_per_s": int(sd_write_bps),
+                    **sd_static,
+                })
+            else:
+                read_bps = nvme_read_rate[n].next()
+                write_bps = nvme_write_rate[n].next()
+                nvme_reads[n] += int(read_bps * 5 / 512_000)  # 5s tick, bytes -> "data units"
+                nvme_writes[n] += int(write_bps * 5 / 512_000)
+                wear = nvme_wear[n].next()
+                hw.update({
                     "nvme_temp_c": nvme_temp[n].next(),
                     "nvme_percent_used": wear,
                     "nvme_avail_spare": round(max(0, 100 - wear * 0.6), 1),
@@ -659,12 +691,9 @@ async def run(state: ClusterState):
                     "nvme_controller_busy_time": int((time.time() - state.started_at) / 60),
                     "nvme_read_bytes_per_s": int(read_bps),
                     "nvme_write_bytes_per_s": int(write_bps),
-                    "net_rx_bytes_per_s": int(net_rx_rate[n].next()),
-                    "net_tx_bytes_per_s": int(net_tx_rate[n].next()),
-                    "undervoltage": False,
                     **nvme_static[n],
-                },
-            )
+                })
+            state.record_hardware(n, hw)
         for ns, pod, _, _ in PODS:
             key = f"{ns}/{pod}"
             state.record_pod_sample(

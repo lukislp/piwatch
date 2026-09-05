@@ -194,6 +194,17 @@ export interface NodeMetrics {
   nvme_num_err_log_entries?: number;
   nvme_read_bytes_per_s?: number;
   nvme_write_bytes_per_s?: number;
+  // SD/eMMC card info, present only on nodes that boot from one (see
+  // backend/app/node_agent.py's read_sd_*()) -- not mutually exclusive with the NVMe
+  // fields above (a node can have both, e.g. NVMe data drive + SD boot card).
+  root_readonly?: boolean;
+  sd_model?: string;
+  sd_serial?: string;
+  sd_manufacture_date?: string;
+  sd_type?: string;
+  sd_capacity_bytes?: number;
+  sd_read_bytes_per_s?: number;
+  sd_write_bytes_per_s?: number;
   net_rx_bytes_per_s?: number;
   net_tx_bytes_per_s?: number;
 }
@@ -211,6 +222,8 @@ export interface HistoryPoint {
   temp_c?: number;
   nvme_read_bytes_per_s?: number;
   nvme_write_bytes_per_s?: number;
+  sd_read_bytes_per_s?: number;
+  sd_write_bytes_per_s?: number;
   net_rx_bytes_per_s?: number;
   net_tx_bytes_per_s?: number;
   [k: string]: number | undefined;

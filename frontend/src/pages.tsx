@@ -164,6 +164,26 @@ export function Overview({ snap, mode }: { snap: Snapshot; mode: Mode }) {
                       </td>
                     </tr>
                   )}
+                  {hw.root_readonly != null && (
+                    <tr>
+                      <td className="muted">Root filesystem</td>
+                      <td className="num">
+                        {hw.root_readonly ? (
+                          <span style={{ color: STATUS.critical }} title="Kernel force-remounted root read-only -- typical of a failing SD/eMMC card">
+                            ⚠ Read-only
+                          </span>
+                        ) : (
+                          <span style={{ color: STATUS.good }}>Read-write</span>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  {hw.sd_model != null && (
+                    <tr>
+                      <td className="muted">SD card</td>
+                      <td className="num">OK (see SD Card tab)</td>
+                    </tr>
+                  )}
                   {hw.nvme_temp_c != null && (
                     <tr>
                       <td className="muted">NVMe</td>
@@ -931,6 +951,74 @@ export function Nvme({ snap, mode }: { snap: Snapshot; mode: Mode }) {
       <NodeChart
         histories={scaledHistory(snap.node_history, "nvme_write_bytes_per_s", 1024 * 1024, "write_mb")}
         field="write_mb" mode={mode} unit=" MB/s" title="NVMe write throughput"
+        axisWidth={70} yTickFormatter={(v) => `${v.toFixed(v < 10 ? 1 : 0)} MB/s`}
+      />
+    </>
+  );
+}
+
+// ---------------- SD Card ----------------
+// Unlike NVMe, real SD/microSD cards implement neither ATA/SCSI SMART nor an NVMe-style
+// wear-level log at all -- there is no privileged path that would unlock a wear percentage
+// for them (see backend/app/node_agent.py's module docstring). This tab surfaces the best
+// proxies actually available: manufacturing date (a rough age signal), cumulative/live
+// write volume (more writes over the card's life -> more wear), and the read-only-remount
+// flag (the concrete failure symptom on a Pi, not just a risk proxy).
+export function SdCard({ snap, mode }: { snap: Snapshot; mode: Mode }) {
+  const nodes = Object.values(snap.nodes)
+    .filter((n) => snap.hardware[n.name]?.sd_model != null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (nodes.length === 0) {
+    return <div className="card muted">No SD/eMMC boot card detected on any node.</div>;
+  }
+
+  return (
+    <>
+      <div className="grid cards">
+        {nodes.map((n) => {
+          const hw = snap.hardware[n.name] ?? {};
+          const readonly = hw.root_readonly === true;
+          return (
+            <div className="card" key={n.name}>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <strong><Dot color={seriesColor(n.name, mode)} />{n.name}</strong>
+                <StatusBadge ok={!readonly} okText="OK" badText="Read-only" />
+              </div>
+              <div className="muted" style={{ marginTop: 2 }}>
+                {hw.sd_model ?? "Unknown model"}
+                {hw.sd_capacity_bytes ? ` · ${fmtBytes(hw.sd_capacity_bytes)}` : ""}
+              </div>
+              <table style={{ marginTop: 8 }}>
+                <tbody>
+                  <tr><td className="muted">Type / Serial</td><td className="num">{hw.sd_type ?? "–"} / {hw.sd_serial ?? "–"}</td></tr>
+                  <tr><td className="muted">Manufactured</td><td className="num">{hw.sd_manufacture_date ?? "–"}</td></tr>
+                  <tr>
+                    <td className="muted">Root filesystem</td>
+                    <td className="num" style={readonly ? { color: STATUS.critical } : undefined}>
+                      {readonly ? "⚠ Read-only (card likely failing)" : "Read-write"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="muted" title="No wear-level register exists on SD/eMMC cards -- cumulative write volume is the closest available proxy">
+                      Wear proxy
+                    </td>
+                    <td className="num">Total writes over time, see chart below</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+      <NodeChart
+        histories={scaledHistory(snap.node_history, "sd_read_bytes_per_s", 1024 * 1024, "read_mb")}
+        field="read_mb" mode={mode} unit=" MB/s" title="SD card read throughput"
+        axisWidth={70} yTickFormatter={(v) => `${v.toFixed(v < 10 ? 1 : 0)} MB/s`}
+      />
+      <NodeChart
+        histories={scaledHistory(snap.node_history, "sd_write_bytes_per_s", 1024 * 1024, "write_mb")}
+        field="write_mb" mode={mode} unit=" MB/s" title="SD card write throughput (higher sustained values -> faster wear)"
         axisWidth={70} yTickFormatter={(v) => `${v.toFixed(v < 10 ? 1 : 0)} MB/s`}
       />
     </>

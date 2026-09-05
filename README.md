@@ -54,6 +54,12 @@ cluster involved.
   total data read/written, host command counts, error counts, and live read/write
   throughput charts. Plus the Pi firmware's under-voltage (bad PSU/PoE) flag, surfaced as a
   plain OK/error indicator on the Overview page
+- **SD/eMMC card health**: dedicated SD Card tab per node booting from one -- model, type,
+  serial, capacity, manufacturing date, and live read/write throughput charts. Real SD
+  cards implement no SMART or wear-level log at all, so there is no wear percentage to
+  show; instead this surfaces the closest available proxies (manufacturing age, cumulative
+  write volume) plus a read-only-root-filesystem alarm, the concrete symptom of a Pi's SD
+  card actually failing
 - **Metrics**: CPU/RAM usage via metrics-server (bundled with k3s), ~3h history
 - **Persistent history** (optional, set `PIWATCH_HISTORY_DB`): the ~3h chart window survives
   a pod restart instead of starting empty, backed by a local SQLite file. Bounded, not
@@ -225,6 +231,18 @@ materially bigger privilege footprint than the rest of the agent (everything els
 read-only sysfs/procfs). If you'd rather not grant it, remove `privileged: true` and the
 `dev` volume/mount -- temperature, model, capacity and the under-voltage flag keep
 working, only the SMART fields go missing.
+
+## SD cards have no SMART equivalent
+
+Unlike NVMe, real SD/microSD cards implement neither ATA/SCSI SMART nor an NVMe-style
+wear-level log at all -- there is no privileged tool or extra permission that would unlock
+a wear percentage for them (the eMMC `LIFETIME_EST`/`PRE_EOL_INFO` registers some guides
+mention are an eMMC-only feature, not exposed by removable SD cards). The SD Card tab
+therefore shows the best proxies actually obtainable, unprivileged, from the card's own
+sysfs attributes and the kernel's block-layer stats: manufacturing date, cumulative/live
+write volume, and whether the root filesystem is currently mounted read-only (the concrete
+failure symptom -- the kernel force-remounts root read-only after uncorrectable storage
+I/O errors, which on a Pi is almost always a dying SD card).
 
 ## Testing failover
 

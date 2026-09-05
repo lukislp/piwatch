@@ -26,6 +26,11 @@ spec:
           operator: Exists
         - key: node-role.kubernetes.io/master
           operator: Exists
+        # pinode01 additionally carries studylife/relief:NoSchedule (keeps app workloads off
+        # the control-plane node after the 2026-09 Longhorn rebalance) - the monitoring agent
+        # is not an app workload and must keep reporting hardware vitals for that node too.
+        - key: studylife/relief
+          operator: Exists
       containers:
         - name: agent
           image: ghcr.io/lukislp/piwatch:1.39.9 # {"$imagepolicy": "flux-system:piwatch"}

@@ -1,3 +1,10 @@
+# [1.40.0](https://github.com/lukislp/piwatch/compare/v1.39.10...v1.40.0) (2026-09-05)
+
+
+### Features
+
+* **node-agent:** add SD/eMMC card health monitoring ([72efa44](https://github.com/lukislp/piwatch/commit/72efa444386d5eeb8d19e5d305b8da05e6afce0c))
+
 ## [1.39.10](https://github.com/lukislp/piwatch/compare/v1.39.9...v1.39.10) (2026-09-05)
 
 

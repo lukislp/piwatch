@@ -134,6 +134,13 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
     case "node_metrics": {
       const node = d.node as string;
       const hist = snap.node_history[node] ?? [];
+      // Hand-kept in sync with backend/app/state.py's NODE_HISTORY_FIELDS -- not shared code,
+      // just the same set of chartable fields on both sides. `hardware`/`node_metrics` below
+      // get the WHOLE delta via `...d` regardless (so live status values like sd_model always
+      // update), but a field missing from THIS list silently never grows past whatever the
+      // initial full_state snapshot already had for it -- exactly what happened when the SD
+      // card fields were added here without this list (charts froze, only the identity/status
+      // rows on the SD Card tab updated).
       const point = {
         t: msg.t ?? Date.now() / 1000,
         cpu_pct: d.cpu_pct,
@@ -141,6 +148,8 @@ function applyDelta(snap: Snapshot, msg: { type: string; t?: number; data?: any 
         temp_c: d.temp_c,
         nvme_read_bytes_per_s: d.nvme_read_bytes_per_s,
         nvme_write_bytes_per_s: d.nvme_write_bytes_per_s,
+        sd_read_bytes_per_s: d.sd_read_bytes_per_s,
+        sd_write_bytes_per_s: d.sd_write_bytes_per_s,
         net_rx_bytes_per_s: d.net_rx_bytes_per_s,
         net_tx_bytes_per_s: d.net_tx_bytes_per_s,
       };

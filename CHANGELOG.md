@@ -1,3 +1,10 @@
+## [1.39.10](https://github.com/lukislp/piwatch/compare/v1.39.9...v1.39.10) (2026-09-05)
+
+
+### Bug Fixes
+
+* **k8s:** let the node-agent tolerate the studylife/relief taint ([b6a5e85](https://github.com/lukislp/piwatch/commit/b6a5e857dfe7cf98556c0f1ce98020eab62c02f7))
+
 ## [1.39.9](https://github.com/lukislp/piwatch/compare/v1.39.8...v1.39.9) (2026-09-04)
 
 

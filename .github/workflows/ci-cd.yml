@@ -30,9 +30,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: backend/requirements.txt
-      - run: pip install -r backend/requirements.txt
-      - run: pip install pytest pytest-cov ruff
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install --require-hashes -r backend/requirements.txt -r backend/requirements-dev.txt
       - run: python -m pytest tests/ --cov=app --cov-report=json:coverage.json
         working-directory: backend
       # backend/pyproject.toml exists and is picked up automatically (working-directory:
@@ -76,7 +75,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install pip-audit
+      - run: pip install --require-hashes -r backend/requirements-dev.txt
       - run: pip-audit -r backend/requirements.txt
 
   # ml/ is a separate, standalone Python project (its own requirements.txt, no shared
@@ -91,9 +90,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: ml/requirements.txt
-      - run: pip install -r ml/requirements.txt
-      - run: pip install pytest
+          cache-dependency-path: ml/requirements*.txt
+      - run: pip install --require-hashes -r ml/requirements.txt -r ml/requirements-dev.txt
       - run: python -m pytest ml/tests/
 
   test-k8s-manifests:

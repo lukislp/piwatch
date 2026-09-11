@@ -1,0 +1,7 @@
+# Test/lint/audit tooling used by CI only (not shipped in the image). Constrained to the
+# runtime lock so both files resolve to one consistent set of versions.
+-c requirements.txt
+pytest
+pytest-cov
+ruff
+pip-audit

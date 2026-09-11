@@ -1,3 +1,10 @@
+## [1.40.6](https://github.com/lukislp/piwatch/compare/v1.40.5...v1.40.6) (2026-09-11)
+
+
+### Bug Fixes
+
+* **deps:** install Python dependencies from hash-locked requirements ([#97](https://github.com/lukislp/piwatch/issues/97)) ([8b5d22e](https://github.com/lukislp/piwatch/commit/8b5d22eba95563aab65078431216efe814ea9e72))
+
 ## [1.40.5](https://github.com/lukislp/piwatch/compare/v1.40.4...v1.40.5) (2026-09-11)
 
 

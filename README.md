@@ -1,6 +1,6 @@
 # 📡 PiWatch – k3s monitoring dashboard for Raspberry Pi
 
-[![CI/CD](https://github.com/lukislp/piwatch/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/lukislp/piwatch/actions/workflows/ci-cd.yml)
+[![CI/CD](https://github.com/lukislp/piwatch/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/lukislp/piwatch/actions/workflows/ci-cd.yml) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/lukislp/piwatch/badge)](https://scorecard.dev/viewer/?uri=github.com/lukislp/piwatch) [![CodeQL](https://github.com/lukislp/piwatch/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/lukislp/piwatch/security/code-scanning)
 [![Release](https://img.shields.io/github/v/release/lukislp/piwatch)](https://github.com/lukislp/piwatch/releases)
 [![License: MIT](https://img.shields.io/github/license/lukislp/piwatch)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB)](https://www.python.org/)

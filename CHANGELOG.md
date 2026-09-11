@@ -1,3 +1,10 @@
+## [1.40.3](https://github.com/lukislp/piwatch/compare/v1.40.2...v1.40.3) (2026-09-11)
+
+
+### Bug Fixes
+
+* **ci:** push release commits as a deploy key so the default branch can be ruleset-protected ([1754e57](https://github.com/lukislp/piwatch/commit/1754e57df652685a0b3649ce435f3c36b66589d4))
+
 ## [1.40.2](https://github.com/lukislp/piwatch/compare/v1.40.1...v1.40.2) (2026-09-05)
 
 

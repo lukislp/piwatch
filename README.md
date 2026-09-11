@@ -166,7 +166,7 @@ because both use the same Secret.
 ## Try it locally (no cluster needed)
 
 ```bash
-cd backend && pip install -r requirements.txt
+cd backend && pip install --require-hashes -r requirements.txt -r requirements-dev.txt
 PIWATCH_DEMO=1 uvicorn app.main:app --port 8000
 # Frontend dev server (optional, with proxy):
 cd ../frontend && npm install && npm run dev

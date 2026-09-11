@@ -1,3 +1,10 @@
+## [1.40.4](https://github.com/lukislp/piwatch/compare/v1.40.3...v1.40.4) (2026-09-11)
+
+
+### Bug Fixes
+
+* **auth:** derive the token signing key with PBKDF2 instead of SHA-256 ([#95](https://github.com/lukislp/piwatch/issues/95)) ([890fe38](https://github.com/lukislp/piwatch/commit/890fe38f0f3a23c17dd67cbcefd3b6e8f64b8ead))
+
 ## [1.40.3](https://github.com/lukislp/piwatch/compare/v1.40.2...v1.40.3) (2026-09-11)
 
 

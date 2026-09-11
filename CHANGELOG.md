@@ -1,3 +1,10 @@
+## [1.40.5](https://github.com/lukislp/piwatch/compare/v1.40.4...v1.40.5) (2026-09-11)
+
+
+### Bug Fixes
+
+* **ci:** read-only GITHUB_TOKEN in the Dependabot auto-merge workflow ([090bf89](https://github.com/lukislp/piwatch/commit/090bf89b4dc27cdd6d8c6827662aeee7bd868682))
+
 ## [1.40.4](https://github.com/lukislp/piwatch/compare/v1.40.3...v1.40.4) (2026-09-11)
 
 

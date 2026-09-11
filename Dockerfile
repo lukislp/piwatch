@@ -1,5 +1,5 @@
 # ---------- Stage 1: Frontend build ----------
-FROM node:20-slim AS frontend
+FROM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS frontend
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install --no-audit --no-fund
@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---------- Stage 2: Backend runtime (arm64 + amd64 compatible) ----------
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PIWATCH_STATIC_DIR=/app/static
 # nvme-cli: only used by the node-agent's NVMe SMART reader (node_agent.py), and only

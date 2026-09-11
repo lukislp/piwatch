@@ -23,7 +23,11 @@ _PASSWORD = os.environ.get("PIWATCH_PASSWORD", "")
 # Secret, so tokens issued by replica A validate on replica B (failover!).
 _SECRET = (
     os.environ.get("PIWATCH_SECRET")
-    or hashlib.sha256(("piwatch:" + _PASSWORD).encode()).hexdigest()
+    # Key stretching instead of a plain digest: every issued token is an HMAC under
+    # this key, so a cheap hash would let anyone who captures one token brute-force
+    # the password offline. The salt is fixed on purpose -- both replicas have to
+    # derive the exact same key (see the note above). Costs ~1s once at startup.
+    or hashlib.pbkdf2_hmac("sha256", _PASSWORD.encode(), b"piwatch", 600_000).hex()
 ).encode()
 
 

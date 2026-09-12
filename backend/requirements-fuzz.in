@@ -1,0 +1,4 @@
+# Fuzzing harness dependency (backend/fuzz/). Separate from requirements-dev.in because the
+# atheris wheel exists for Linux only; constrained to the runtime lock like the dev file.
+-c requirements.txt
+atheris

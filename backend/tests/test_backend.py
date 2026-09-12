@@ -229,3 +229,27 @@ def test_parse_mem(value, expected):
     from app.collectors.metrics import parse_mem
 
     assert parse_mem(value) == pytest.approx(expected)
+
+
+# Found by the fuzz harness (backend/fuzz/fuzz_quantities.py): float() happily parses
+# exponents, "inf" and "nan", so "7e77" used to come back as infinity and a huge digit string
+# overflowed int(). Kubernetes quantities are plain decimals; everything else is a ValueError,
+# which is the one exception the metrics poller catches.
+@pytest.mark.parametrize(
+    "value",
+    ["7e77m", "1e400", "inf", "nan", "-1", "", "m", "9" * 400 + "n", "1.5.5", "0x10Mi"],
+)
+def test_parse_quantities_reject_non_quantities(value):
+    from app.collectors.metrics import parse_cpu, parse_mem
+
+    with pytest.raises(ValueError):
+        parse_cpu(value)
+    with pytest.raises(ValueError):
+        parse_mem(value)
+
+
+def test_parse_quantities_accept_decimals():
+    from app.collectors.metrics import parse_cpu, parse_mem
+
+    assert parse_cpu("0.5") == pytest.approx(0.5)
+    assert parse_mem("1.5Gi") == pytest.approx(1.5 * 1024**3)

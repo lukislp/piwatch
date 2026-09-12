@@ -1,3 +1,10 @@
+## [1.40.7](https://github.com/lukislp/piwatch/compare/v1.40.6...v1.40.7) (2026-09-12)
+
+
+### Bug Fixes
+
+* **metrics:** reject exponent, inf and nan Kubernetes quantities ([#98](https://github.com/lukislp/piwatch/issues/98)) ([18ddc0a](https://github.com/lukislp/piwatch/commit/18ddc0abdd7511e7cae4a1122a3e79e42451c8f7))
+
 ## [1.40.6](https://github.com/lukislp/piwatch/compare/v1.40.5...v1.40.6) (2026-09-11)
 
 

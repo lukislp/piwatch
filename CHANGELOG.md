@@ -1,3 +1,10 @@
+## [1.40.8](https://github.com/lukislp/piwatch/compare/v1.40.7...v1.40.8) (2026-09-12)
+
+
+### Bug Fixes
+
+* **ci:** bump the deployment image tag from the pipeline instead of Flux ([#100](https://github.com/lukislp/piwatch/issues/100)) ([a10268e](https://github.com/lukislp/piwatch/commit/a10268e0670f237153827c8927ba2b068b01a2e6))
+
 ## [1.40.7](https://github.com/lukislp/piwatch/compare/v1.40.6...v1.40.7) (2026-09-12)
 
 

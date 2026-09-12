@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import re
 
 from ..state import ClusterState
 
@@ -14,16 +16,32 @@ log = logging.getLogger("piwatch.metrics")
 POLL_INTERVAL = 10
 
 
+# A Kubernetes quantity is a plain decimal number plus an optional suffix - never an exponent,
+# "inf" or "nan". float() would accept all of those (and int() overflows on very long digit
+# strings), so the number part is checked first; both parsers then raise ValueError, the one
+# exception the metrics poller expects, for anything else.
+_QUANTITY_NUMBER_RE = re.compile(r"^[0-9]+(\.[0-9]+)?$")
+
+
+def _finite(number: str, factor: float, what: str) -> float:
+    if not _QUANTITY_NUMBER_RE.match(number):
+        raise ValueError(f"not a Kubernetes {what} quantity: {number!r}")
+    result = float(number) * factor
+    if not math.isfinite(result):
+        raise ValueError(f"{what} quantity out of range: {number!r}")
+    return result
+
+
 def parse_cpu(v: str) -> float:
     """Kubernetes CPU quantity -> cores (e.g. '250m' -> 0.25, '1' -> 1.0)."""
     v = v.strip()
     if v.endswith("n"):
-        return int(v[:-1]) / 1e9
+        return _finite(v[:-1], 1e-9, "cpu")
     if v.endswith("u"):
-        return int(v[:-1]) / 1e6
+        return _finite(v[:-1], 1e-6, "cpu")
     if v.endswith("m"):
-        return int(v[:-1]) / 1e3
-    return float(v)
+        return _finite(v[:-1], 1e-3, "cpu")
+    return _finite(v, 1.0, "cpu")
 
 
 _MEM_FACTORS = {
@@ -37,8 +55,8 @@ def parse_mem(v: str) -> float:
     v = v.strip()
     for suffix, factor in _MEM_FACTORS.items():
         if v.endswith(suffix):
-            return float(v[: -len(suffix)]) * factor
-    return float(v)
+            return _finite(v[: -len(suffix)], factor, "memory")
+    return _finite(v, 1.0, "memory")
 
 
 async def run(state: ClusterState):

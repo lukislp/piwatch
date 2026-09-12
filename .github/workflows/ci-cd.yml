@@ -94,6 +94,23 @@ jobs:
       - run: pip install --require-hashes -r ml/requirements.txt -r ml/requirements-dev.txt
       - run: python -m pytest ml/tests/
 
+  # Coverage-guided fuzzing of the pure parsers (backend/fuzz/): a short fixed budget per run,
+  # enough to catch a crash on the next code change, cheap enough to run on every push.
+  fuzz-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install --require-hashes -r backend/requirements.txt -r backend/requirements-fuzz.txt
+      - run: python fuzz/fuzz_quantities.py -max_total_time=30 -rss_limit_mb=1024
+        working-directory: backend
+      - run: python fuzz/fuzz_flux_timestamps.py -max_total_time=30 -rss_limit_mb=1024
+        working-directory: backend
+
   test-k8s-manifests:
     runs-on: ubuntu-latest
     container:

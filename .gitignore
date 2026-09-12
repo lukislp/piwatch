@@ -17,3 +17,9 @@ ml/data/parquet/
 ml/exploration/figures/
 ml/model/checkpoints/
 ml/mlruns/
+
+# libFuzzer artifacts written by backend/fuzz/ harness runs
+backend/crash-*
+backend/leak-*
+backend/timeout-*
+backend/oom-*

@@ -17,7 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends nvme-cli \
     && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt .
 # Hash-locked (pip-compile --generate-hashes): every wheel is verified against the lock.
-RUN pip install --no-cache-dir --require-hashes -r requirements.txt
+# --root-user-action=ignore: the image has no other user and pip's "running as root" warning
+# was the only warning left in the build log.
+RUN pip install --no-cache-dir --require-hashes --root-user-action=ignore -r requirements.txt
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./static
 # Non-root runtime user for the backend (numeric so runAsNonRoot can be

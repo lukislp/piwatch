@@ -24,6 +24,7 @@ jobs:
   # ---------------------------------------------------------------------
   test-backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -51,6 +52,7 @@ jobs:
 
   test-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -70,6 +72,7 @@ jobs:
 
   test-security:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -84,6 +87,7 @@ jobs:
   # ml/requirements.txt was proving nothing (2026-09-05).
   test-ml:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -98,6 +102,7 @@ jobs:
   # enough to catch a crash on the next code change, cheap enough to run on every push.
   fuzz-backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -113,6 +118,7 @@ jobs:
 
   test-k8s-manifests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container:
       image: ghcr.io/yannh/kubeconform:latest-alpine
     steps:
@@ -127,6 +133,7 @@ jobs:
     # every test job explicitly.
     needs: [test-backend, test-frontend, test-security, test-k8s-manifests, test-ml]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build -t piwatch:build-check .
@@ -138,6 +145,7 @@ jobs:
     needs: [build]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     concurrency:
       group: piwatch-release-chain
       cancel-in-progress: false
@@ -213,6 +221,7 @@ jobs:
             platform: linux/arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -289,6 +298,7 @@ jobs:
     needs: [get-version, docker-build-push]
     if: github.event_name == 'push' && needs.get-version.outputs.published == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -345,6 +355,7 @@ jobs:
     needs: [get-version, docker-manifest-merge]
     if: github.event_name == 'push' && needs.get-version.outputs.published == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     concurrency:
       group: piwatch-release-chain
       cancel-in-progress: false
@@ -400,6 +411,7 @@ jobs:
     needs: [get-version, docker-manifest-merge]
     if: github.event_name == 'push' && needs.get-version.outputs.published == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     concurrency:
       group: piwatch-release-chain
       cancel-in-progress: false
@@ -427,6 +439,7 @@ jobs:
     needs: [get-version]
     if: github.event_name == 'push' && needs.get-version.outputs.published == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     concurrency:
       group: piwatch-release-chain
       cancel-in-progress: false

@@ -5,3 +5,7 @@
 # failure (network blip, apiserver restart, unreachable agent) logs and retries instead of
 # crashing the whole collector loop.
 ignore = ["BLE001", "S110"]
+
+[tool.pytest.ini_options]
+# starlette/testclient.py still imports the deprecated anyio.abc.BlockingPortal alias - upstream.
+filterwarnings = ["ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning"]

@@ -1,3 +1,10 @@
+## [1.40.10](https://github.com/lukislp/piwatch/compare/v1.40.9...v1.40.10) (2026-09-13)
+
+
+### Bug Fixes
+
+* **k8s:** give probes a 5s timeout so load spikes stop killing pods ([#112](https://github.com/lukislp/piwatch/issues/112)) ([410635a](https://github.com/lukislp/piwatch/commit/410635a49764180a0b2d91a43015f7958cca930e))
+
 ## [1.40.9](https://github.com/lukislp/piwatch/compare/v1.40.8...v1.40.9) (2026-09-13)
 
 

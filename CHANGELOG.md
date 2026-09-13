@@ -1,3 +1,10 @@
+## [1.40.9](https://github.com/lukislp/piwatch/compare/v1.40.8...v1.40.9) (2026-09-13)
+
+
+### Bug Fixes
+
+* **docker:** apply Debian security updates at build time ([#111](https://github.com/lukislp/piwatch/issues/111)) ([24f3da8](https://github.com/lukislp/piwatch/commit/24f3da8abfbbe74fb9571e9d39df46dc76624a4f))
+
 ## [1.40.8](https://github.com/lukislp/piwatch/compare/v1.40.7...v1.40.8) (2026-09-12)
 
 

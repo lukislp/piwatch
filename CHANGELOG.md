@@ -1,3 +1,11 @@
+## [1.40.11](https://github.com/lukislp/piwatch/compare/v1.40.10...v1.40.11) (2026-09-14)
+
+
+### Bug Fixes
+
+* **deps:** bump the react group in /frontend with 2 updates ([507878f](https://github.com/lukislp/piwatch/commit/507878f6118566bb103eb618c7f3a6d06afeef54))
+* **deps:** bump vite from 8.2.2 to 8.3.0 in /frontend in the dev group ([795c4b5](https://github.com/lukislp/piwatch/commit/795c4b5acf2ac66127b833a4a8303536fd8d2cd1))
+
 ## [1.40.10](https://github.com/lukislp/piwatch/compare/v1.40.9...v1.40.10) (2026-09-13)
 
 

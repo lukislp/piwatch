@@ -8,7 +8,6 @@ backend/.coverage
 backend/coverage.json
 backend/coverage-badge.json
 deploy/secret.yaml
-CLAUDE.md
 
 # Cluster telemetry dumps and training artifacts -- never committed (real usage
 # data, not source), see ml/README.md.

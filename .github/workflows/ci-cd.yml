@@ -12,7 +12,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
-  NODE_VERSION: "20"
+  NODE_VERSION: "24"
   IMAGE: ghcr.io/lukislp/piwatch
 
 permissions:
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------
-  # Test stage — runs on every push to master AND every pull request
+  # Test stage â€” runs on every push to master AND every pull request
   # ---------------------------------------------------------------------
   test-backend:
     runs-on: ubuntu-latest
@@ -139,7 +139,7 @@ jobs:
       - run: docker build -t piwatch:build-check .
 
   # ---------------------------------------------------------------------
-  # Version / docker / release — push to master only
+  # Version / docker / release â€” push to master only
   # ---------------------------------------------------------------------
   get-version:
     needs: [build]

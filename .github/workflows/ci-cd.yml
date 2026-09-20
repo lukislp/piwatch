@@ -170,11 +170,11 @@ jobs:
       # get-version too: @semantic-release/git's verifyConditions runs `git push --dry-run`
       # even in dry-run mode. Same mechanism as lukislp/studylife's ci-cd.yml.
       - name: Push as the semantic-release deploy key (if configured)
-        uses: lukislp/ci-workflows/.github/actions/deploy-key-push@d6ea7363956999dc7b3695e8b446f6361b102c6b # v1.5.4
+        uses: lukislp/ci-workflows/.github/actions/deploy-key-push@045f17628d155f7e56c2f6ebdbd473b31e247112 # v1.6.0
         with:
           deploy-key: ${{ secrets.SEMANTIC_RELEASE_DEPLOY_KEY }}
       - id: semrel
-        uses: lukislp/ci-workflows/.github/actions/semantic-release@d6ea7363956999dc7b3695e8b446f6361b102c6b # v1.5.4
+        uses: lukislp/ci-workflows/.github/actions/semantic-release@045f17628d155f7e56c2f6ebdbd473b31e247112 # v1.6.0
         with:
           dry-run: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -354,7 +354,7 @@ jobs:
       # Same deploy-key push as the release jobs - the default branch only takes direct pushes
       # from that key, so this job cannot fall back to GITHUB_TOKEN.
       - name: Push as the semantic-release deploy key
-        uses: lukislp/ci-workflows/.github/actions/deploy-key-push@d6ea7363956999dc7b3695e8b446f6361b102c6b # v1.5.4
+        uses: lukislp/ci-workflows/.github/actions/deploy-key-push@045f17628d155f7e56c2f6ebdbd473b31e247112 # v1.6.0
         with:
           deploy-key: ${{ secrets.SEMANTIC_RELEASE_DEPLOY_KEY }}
           required: "true"
@@ -443,7 +443,7 @@ jobs:
       # get-version too: @semantic-release/git's verifyConditions runs `git push --dry-run`
       # even in dry-run mode. Same mechanism as lukislp/studylife's ci-cd.yml.
       - name: Push as the semantic-release deploy key (if configured)
-        uses: lukislp/ci-workflows/.github/actions/deploy-key-push@d6ea7363956999dc7b3695e8b446f6361b102c6b # v1.5.4
+        uses: lukislp/ci-workflows/.github/actions/deploy-key-push@045f17628d155f7e56c2f6ebdbd473b31e247112 # v1.6.0
         with:
           deploy-key: ${{ secrets.SEMANTIC_RELEASE_DEPLOY_KEY }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -452,7 +452,7 @@ jobs:
           path: coverage-artifact
       - run: mkdir -p .github/badges && mv coverage-artifact/coverage-badge.json .github/badges/coverage.json
       - id: semrel
-        uses: lukislp/ci-workflows/.github/actions/semantic-release@d6ea7363956999dc7b3695e8b446f6361b102c6b # v1.5.4
+        uses: lukislp/ci-workflows/.github/actions/semantic-release@045f17628d155f7e56c2f6ebdbd473b31e247112 # v1.6.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
@@ -472,6 +472,6 @@ jobs:
           fi
           git checkout -B master origin/master
       - if: steps.semrel.outcome == 'failure'
-        uses: lukislp/ci-workflows/.github/actions/semantic-release@d6ea7363956999dc7b3695e8b446f6361b102c6b # v1.5.4
+        uses: lukislp/ci-workflows/.github/actions/semantic-release@045f17628d155f7e56c2f6ebdbd473b31e247112 # v1.6.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

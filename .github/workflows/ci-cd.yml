@@ -369,17 +369,14 @@ jobs:
             exit 0
           fi
           git diff --stat
-          git config user.name "piwatch-deploy"
-          git config user.email "deploy@studylife.local"
-          git commit -am "chore(deploy): image ${NEXT_VERSION} [skip ci]"
-          # The branch may have moved (an out-of-band push) between checkout and now - rebase, retry.
-          for attempt in 1 2 3; do
-            git push origin HEAD:master && exit 0
-            git fetch origin master
-            git rebase origin/master
-          done
-          echo "::error::could not push the image tag bump"
-          exit 1
+      - name: Sign and push the image tag bump
+        uses: lukislp/ci-workflows/.github/actions/signed-bot-commit@045f17628d155f7e56c2f6ebdbd473b31e247112 # v1.6.0
+        with:
+          signing-key: ${{ secrets.DEPLOY_SIGNING_KEY }}
+          committer-name: "piwatch-deploy"
+          committer-email: "155678024+lukislp@users.noreply.github.com"
+          commit-message: "chore(deploy): image ${{ env.NEXT_VERSION }} [skip ci]"
+          branch: master
 
   trivy-scan:
     needs: [get-version, docker-manifest-merge]

@@ -1,3 +1,11 @@
+## [1.40.12](https://github.com/lukislp/piwatch/compare/v1.40.11...v1.40.12) (2026-09-21)
+
+
+### Bug Fixes
+
+* **ci:** bump github/codeql-action/upload-sarif from 4.38.0 to 4.38.1 ([#134](https://github.com/lukislp/piwatch/issues/134)) ([35d0cc4](https://github.com/lukislp/piwatch/commit/35d0cc405eda560fa0e2d856f674ee9c4c6192f7))
+* **deps:** bump uvicorn from 0.52.4 to 0.53.0 in /backend ([#127](https://github.com/lukislp/piwatch/issues/127)) ([5debf29](https://github.com/lukislp/piwatch/commit/5debf2950d11c0cf0d8ec119b711280b39442dfc))
+
 ## [1.40.11](https://github.com/lukislp/piwatch/compare/v1.40.10...v1.40.11) (2026-09-14)
 
 

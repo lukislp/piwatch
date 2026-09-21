@@ -1,3 +1,14 @@
+## [1.40.13](https://github.com/lukislp/piwatch/compare/v1.40.12...v1.40.13) (2026-09-21)
+
+
+### Bug Fixes
+
+* **ci:** bump docker/setup-buildx-action from 4.3.0 to 4.4.1 ([#133](https://github.com/lukislp/piwatch/issues/133)) ([1974754](https://github.com/lukislp/piwatch/commit/1974754030feac58b49159d4ba6367a1d13a365c))
+* **deps:** bump httpx2 from 2.12.0 to 2.13.0 in /backend ([#128](https://github.com/lukislp/piwatch/issues/128)) ([f4bfffb](https://github.com/lukislp/piwatch/commit/f4bfffb08641f40a9e122cfe20f0968d6d95eece))
+* **deps:** bump mlflow from 3.16.0 to 3.16.1 in /ml ([#131](https://github.com/lukislp/piwatch/issues/131)) ([dcc2f08](https://github.com/lukislp/piwatch/commit/dcc2f0892bedf7b1f9b82d8cdd179646ef90e19f))
+* **deps:** bump pandas from 3.0.5 to 3.0.6 in /ml ([#130](https://github.com/lukislp/piwatch/issues/130)) ([84d8975](https://github.com/lukislp/piwatch/commit/84d8975a631961908d58cda9b9eede17a9044832))
+* **deps:** bump ruff from 0.16.7 to 0.16.8 in /backend ([#129](https://github.com/lukislp/piwatch/issues/129)) ([ad5aeef](https://github.com/lukislp/piwatch/commit/ad5aeef1475ec1aba27b7db7208bc30fc7fd5363))
+
 ## [1.40.12](https://github.com/lukislp/piwatch/compare/v1.40.11...v1.40.12) (2026-09-21)
 
 

@@ -1,3 +1,10 @@
+## [1.40.14](https://github.com/lukislp/piwatch/compare/v1.40.13...v1.40.14) (2026-09-21)
+
+
+### Bug Fixes
+
+* **ci:** bump docker/build-push-action from 7.3.0 to 7.4.0 ([#132](https://github.com/lukislp/piwatch/issues/132)) ([a82590f](https://github.com/lukislp/piwatch/commit/a82590f07e712a29107880511ea12db273834be0))
+
 ## [1.40.13](https://github.com/lukislp/piwatch/compare/v1.40.12...v1.40.13) (2026-09-21)
 
 

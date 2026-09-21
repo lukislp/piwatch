@@ -7,4 +7,4 @@ ruff
 pip-audit
 # Starlette 1.6 deprecates its TestClient over httpx and warns on every test run until httpx2
 # is installed.
-httpx2>=2.12
+httpx2>=2.13.0

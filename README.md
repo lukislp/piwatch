@@ -220,17 +220,23 @@ your own domains.
 4. **Access**: whichever hostnames you configured in `deploy/httproute.yaml`
    (e.g. an internal `.lan` name plus a public domain behind your reverse proxy).
 
-## NVMe SMART needs a privileged node-agent
+## NVMe SMART needs one privileged process -- but not the agent
 
 The NVMe temperature, model and capacity fields work from plain, unprivileged sysfs
 reads. Full SMART data (wear %, power-on hours, media errors, ...) additionally needs
-`nvme-cli` and access to the NVMe admin character device -- that ioctl is gated by the
-kernel regardless of file permissions, so `deploy/daemonset-node-agent.yaml` runs the
-node-agent container with `privileged: true` and a `/dev` mount for this. That's a
-materially bigger privilege footprint than the rest of the agent (everything else is
-read-only sysfs/procfs). If you'd rather not grant it, remove `privileged: true` and the
-`dev` volume/mount -- temperature, model, capacity and the under-voltage flag keep
-working, only the SMART fields go missing.
+`nvme-cli` and access to the NVMe admin character device. That ioctl is gated by the
+device cgroup, which only a privileged container is exempt from -- no capability unlocks
+it (verified live: `CAP_SYS_ADMIN` plus a hostPath of just `/dev/nvme0` still gets EPERM).
+
+`deploy/daemonset-node-agent.yaml` therefore splits the pod: the node-agent container
+that serves `/metrics` runs unprivileged as uid 10001 with a read-only root filesystem,
+dropped capabilities and no `/dev` at all, and a minimal privileged sidecar
+(`nvme-smart`, a shell loop with no listening port and a read-only `/dev`) dumps
+`nvme smart-log` and `nvme id-ctrl` as JSON into a shared emptyDir once a minute. The
+agent reads those dumps via `PIWATCH_NVME_SMART_FILE` / `PIWATCH_NVME_IDCTRL_FILE`. On a
+node without an NVMe drive the sidecar removes the dumps and the SMART fields simply go
+missing. If you'd rather not run any privileged container, delete the sidecar and the
+`dev` volume -- temperature, model, capacity and the under-voltage flag keep working.
 
 ## SD cards have no SMART equivalent
 

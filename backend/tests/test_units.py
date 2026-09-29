@@ -1440,3 +1440,36 @@ def test_fake_logs_yields_formatted_lines_and_handles_both_msg_shapes(monkeypatc
         assert "heartbeat ok" in line2
 
     asyncio.run(scenario())
+
+def test_read_nvme_smart_reads_the_sidecar_dump_instead_of_running_nvme_cli(tmp_path, monkeypatch):
+    dump = tmp_path / "smart.json"
+    dump.write_text(json.dumps({"percent_used": 13, "power_on_hours": 9123, "not_a_field": 1}))
+    monkeypatch.setattr(node_agent, "NVME_SMART_FILE", str(dump))
+
+    def fake_run(*args, **kwargs):  # pragma: no cover - must not be reached
+        raise AssertionError("nvme-cli must not be invoked when a dump file is configured")
+
+    monkeypatch.setattr(node_agent.subprocess, "run", fake_run)
+    assert node_agent.read_nvme_smart() == {"nvme_percent_used": 13, "nvme_power_on_hours": 9123}
+
+
+def test_read_nvme_smart_returns_empty_dict_when_the_sidecar_dump_is_missing(tmp_path, monkeypatch):
+    # The sidecar removes the dump on nodes without an NVMe drive (pinode03) - not an error.
+    monkeypatch.setattr(node_agent, "NVME_SMART_FILE", str(tmp_path / "absent.json"))
+    assert node_agent.read_nvme_smart() == {}
+
+
+def test_read_nvme_smart_returns_empty_dict_on_a_torn_sidecar_dump(tmp_path, monkeypatch):
+    dump = tmp_path / "smart.json"
+    dump.write_text('{"percent_used": 1')  # half-written file (the sidecar writes tmp+mv, but be safe)
+    monkeypatch.setattr(node_agent, "NVME_SMART_FILE", str(dump))
+    assert node_agent.read_nvme_smart() == {}
+
+
+def test_read_nvme_ctrl_info_reads_the_sidecar_dump(tmp_path, monkeypatch):
+    dump = tmp_path / "id-ctrl.json"
+    dump.write_text(json.dumps({"fr": "1.2.3  ", "sn": "  ABC123 ", "mn": "ignored"}))
+    monkeypatch.setattr(node_agent, "NVME_IDCTRL_FILE", str(dump))
+    out = node_agent.read_nvme_ctrl_info()
+    assert out["nvme_firmware"] == "1.2.3"
+    assert out["nvme_serial"] == "ABC123"

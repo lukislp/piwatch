@@ -20,9 +20,9 @@ RUN sed -i 's#http://deb.debian.org#https://deb.debian.org#' /etc/apt/sources.li
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PIWATCH_STATIC_DIR=/app/static
-# nvme-cli: only used by the node-agent's NVMe SMART reader (node_agent.py), and only
-# works there when the DaemonSet grants it privileged+/dev access (see
-# deploy/daemonset-node-agent.yaml) -- harmless/unused in the backend Deployment.
+# nvme-cli: only used by the node-agent DaemonSet's privileged "nvme-smart" sidecar (see
+# deploy/daemonset-node-agent.yaml), and by node_agent.py itself only when no sidecar dump
+# is configured (local dev) -- harmless/unused in the backend Deployment.
 RUN apt-get update && apt-get install -y --no-install-recommends nvme-cli \
     && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt .
@@ -32,11 +32,11 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --require-hashes --root-user-action=ignore -r requirements.txt
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./static
-# Non-root runtime user for the backend (numeric so runAsNonRoot can be
-# verified); nothing inside the image needs to be writable - the history db
-# lives on a volume. The node-agent DaemonSet overrides this back to root
-# explicitly: privileged capabilities are only effective for UID 0, and the
-# NVMe SMART ioctl needs them (see deploy/daemonset-node-agent.yaml).
+# Non-root runtime user for the backend AND the node-agent container (numeric so
+# runAsNonRoot can be verified); nothing inside the image needs to be writable - the
+# history db lives on a volume. Only the DaemonSet's nvme-smart sidecar overrides this
+# back to root: privileged capabilities are only effective for UID 0, and the NVMe SMART
+# ioctl needs them (see deploy/daemonset-node-agent.yaml).
 RUN useradd --uid 10001 --user-group --no-create-home piwatch
 ENV HOME=/tmp
 USER 10001

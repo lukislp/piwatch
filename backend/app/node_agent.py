@@ -10,10 +10,18 @@ the backend:
 
 NVMe SMART data (wear level, power-on hours, ...) additionally needs
 `nvme-cli` and raw access to the NVMe admin character device, which the
-kernel only grants to a privileged container -- see the securityContext
-and /dev mount in deploy/daemonset-node-agent.yaml. Everything else here
-(temperature, model, capacity, under-voltage, SD card info) works from
-unprivileged sysfs reads alone and degrades to None/{} when unavailable
+kernel only grants to a privileged container (the admin ioctl is gated by
+the device cgroup, not by file permissions or capabilities -- verified live:
+CAP_SYS_ADMIN plus the device node alone still gets EPERM). This process
+therefore never talks to the device itself: deploy/daemonset-node-agent.yaml
+runs it unprivileged as uid 10001 and adds a minimal privileged sidecar
+("nvme-smart", a shell loop with no listening port) that dumps
+`nvme smart-log` / `nvme id-ctrl` as JSON into a shared emptyDir, which this
+process reads via PIWATCH_NVME_SMART_FILE / PIWATCH_NVME_IDCTRL_FILE. Without
+those variables (local dev, tests) it falls back to calling nvme-cli directly.
+Everything else here (temperature, model, capacity, under-voltage, SD card
+info) works from unprivileged sysfs reads alone and degrades to None/{} when
+unavailable
 (e.g. no PoE+ M.2 HAT, not booting from SD, or running locally on a dev
 machine). SD cards implement neither ATA/SCSI SMART nor an NVMe-style
 wear-level log at all, so unlike NVMe there is no privileged path that
@@ -37,6 +45,10 @@ PROC = os.environ.get("PIWATCH_PROC", "/proc")
 DISK_PATH = os.environ.get("PIWATCH_DISK_PATH", "/")
 NODE_NAME = os.environ.get("NODE_NAME", os.uname().nodename)
 NVME_DEVICE = os.environ.get("PIWATCH_NVME_DEVICE", "/dev/nvme0")
+# JSON dumps written by the privileged "nvme-smart" sidecar (see the DaemonSet). When set, the
+# agent reads these instead of running nvme-cli itself, which is what lets it run unprivileged.
+NVME_SMART_FILE = os.environ.get("PIWATCH_NVME_SMART_FILE")
+NVME_IDCTRL_FILE = os.environ.get("PIWATCH_NVME_IDCTRL_FILE")
 
 NVME_SMART_FIELDS = (
     "percent_used",
@@ -373,23 +385,39 @@ def read_undervoltage() -> bool | None:
         return None
 
 
-def read_nvme_smart() -> dict:
-    """Full SMART log via `nvme-cli`. Requires a privileged container with
-    access to the NVMe admin character device (NVME_DEVICE) -- the default,
-    unprivileged securityContext gets EPERM on that ioctl regardless of file
-    permissions, so this deliberately degrades to {} (no extra keys) rather
-    than raising, keeping /metrics usable without the elevated DaemonSet.
+def _nvme_json(subcommand: str, dump_file: str | None) -> dict:
+    """One `nvme <subcommand> NVME_DEVICE -o json` result as a dict.
+
+    In the DaemonSet the privileged "nvme-smart" sidecar runs nvme-cli and
+    leaves the JSON in `dump_file`; this process (unprivileged, no /dev) only
+    parses it. The sidecar removes the file when the device is absent (a node
+    without an NVMe drive), so a missing file is the normal "no data" case.
+    Without a dump file configured (local dev, tests) nvme-cli is invoked
+    directly -- which only yields data inside a privileged container, the admin
+    ioctl gets EPERM otherwise. Every failure path returns {} so /metrics stays
+    usable; the SMART keys simply go missing.
     """
     try:
+        if dump_file:
+            with open(dump_file) as f:
+                return json.load(f)
         result = subprocess.run(
-            ["nvme", "smart-log", NVME_DEVICE, "-o", "json"],
+            ["nvme", subcommand, NVME_DEVICE, "-o", "json"],
             capture_output=True,
             timeout=5,
             check=True,
             text=True,
         )
-        data = json.loads(result.stdout)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return json.loads(result.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError):
+        return {}
+
+
+def read_nvme_smart() -> dict:
+    """Full SMART log (wear %, power-on hours, media errors, ...), filtered to
+    NVME_SMART_FIELDS. See _nvme_json() for where the data comes from."""
+    data = _nvme_json("smart-log", NVME_SMART_FILE)
+    if not isinstance(data, dict):
         return {}
     return {f"nvme_{key}": data[key] for key in NVME_SMART_FIELDS if key in data}
 
@@ -397,18 +425,10 @@ def read_nvme_smart() -> dict:
 def read_nvme_ctrl_info() -> dict:
     """Firmware revision + serial number via `nvme id-ctrl`. Model/capacity
     come from sysfs already (read_nvme_info(), unprivileged) -- this only
-    adds the two fields sysfs doesn't expose. Same privilege requirement
-    and failure handling as read_nvme_smart()."""
-    try:
-        result = subprocess.run(
-            ["nvme", "id-ctrl", NVME_DEVICE, "-o", "json"],
-            capture_output=True,
-            timeout=5,
-            check=True,
-            text=True,
-        )
-        data = json.loads(result.stdout)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+    adds the two fields sysfs doesn't expose. Same data source and failure
+    handling as read_nvme_smart(), see _nvme_json()."""
+    data = _nvme_json("id-ctrl", NVME_IDCTRL_FILE)
+    if not isinstance(data, dict):
         return {}
     out: dict = {}
     if "fr" in data:

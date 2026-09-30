@@ -9,7 +9,10 @@ metadata:
     # privileged-container finding with its reason instead of leaving it
     # open. The securityContext comments below hold the full story.
     autodoc.homelab/accept-privileged-container: >-
-      NVMe SMART ioctls on /dev/nvme0 need privileged root - verified live: EPERM as plain root; everything else the agent reads is unprivileged sysfs/procfs
+      Only the nvme-smart sidecar is privileged: the NVMe admin ioctl is gated by the device
+      cgroup, which no capability unlocks (verified live: CAP_SYS_ADMIN + /dev/nvme0 alone
+      still EPERM). The sidecar is a shell loop with no listening port, no service account and
+      a read-only /dev; the agent container that serves /metrics runs unprivileged as uid 10001.
 spec:
   selector:
     matchLabels: {app: piwatch-node-agent}
@@ -35,27 +38,18 @@ spec:
         - name: agent
           image: ghcr.io/lukislp/piwatch:1.40.22 # set by the deploy-bump job (CI) on every release
           command: ["uvicorn", "app.node_agent:app", "--host", "0.0.0.0", "--port", "9101"]
-          # privileged: true is required ONLY for the NVMe SMART reader (node_agent.py's
-          # read_nvme_smart(), via nvme-cli): the NVMe admin passthrough ioctl it issues is
-          # gated by CAP_SYS_ADMIN/the device cgroup regardless of file permissions on
-          # /dev/nvme0 - confirmed live (EPERM as root, non-privileged) before adding this.
-          # This is a materially bigger privilege footprint than the rest of the agent
-          # (everything else here is unprivileged, read-only sysfs/procfs access) - if you'd
-          # rather not grant it, drop `privileged: true` and the `dev` volume/mount below;
-          # temperature, model, capacity and the under-voltage flag all keep working from
-          # plain sysfs, only the SMART fields (wear %, power-on hours, ...) go missing.
+          # Unprivileged since 2026-09-29: everything this container reads is read-only sysfs/
+          # procfs plus the two JSON dumps the nvme-smart sidecar below leaves in /shared. It
+          # never touches /dev. The image's default user (uid 10001, see the Dockerfile) is
+          # enough; the restricted-profile fields are all set explicitly.
           securityContext:
-            privileged: true
-            # The shared image now defaults to UID 10001 (see the Dockerfile);
-            # the agent must stay root explicitly - a privileged container's
-            # capabilities are only effective for UID 0, and the NVMe ioctl
-            # needs them.
-            runAsUser: 0
-            # Explicit, not just implied by privileged:true: the previously-live manifest had
-            # allowPrivilegeEscalation:false set, and since apply only adds/changes fields it
-            # mentions, that stale false would otherwise survive the merge - combined with
-            # privileged:true, the API server rejects that as invalid (confirmed live).
-            allowPrivilegeEscalation: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+            seccompProfile: {type: RuntimeDefault}
           ports:
             - containerPort: 9101
           env:
@@ -64,12 +58,14 @@ spec:
             - {name: PIWATCH_SYS, value: /host/sys}
             - {name: PIWATCH_PROC, value: /host/proc}
             - {name: PIWATCH_DISK_PATH, value: /host/root}
-            - {name: PIWATCH_NVME_DEVICE, value: /host/dev/nvme0}
+            - {name: PIWATCH_NVME_SMART_FILE, value: /shared/nvme-smart-log.json}
+            - {name: PIWATCH_NVME_IDCTRL_FILE, value: /shared/nvme-id-ctrl.json}
           volumeMounts:
             - {name: sys, mountPath: /host/sys, readOnly: true}
             - {name: proc, mountPath: /host/proc, readOnly: true}
             - {name: root, mountPath: /host/root, readOnly: true}
-            - {name: dev, mountPath: /host/dev}
+            - {name: nvme-dumps, mountPath: /shared, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
           resources:
             requests: {cpu: 10m, memory: 32Mi}
             limits: {cpu: 100m, memory: 64Mi}
@@ -89,8 +85,50 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+        # The only privileged process left, and the smallest one that can do the job: a shell
+        # loop that dumps `nvme smart-log` and `nvme id-ctrl` as JSON into the shared emptyDir
+        # once a minute. privileged is required because the NVMe admin passthrough ioctl is
+        # gated by the device cgroup, which only a privileged container is exempt from -
+        # confirmed live with CAP_SYS_ADMIN + a hostPath of /dev/nvme0 only (still EPERM).
+        # What this container does NOT have: a listening port, a service account token, a
+        # Python interpreter in its process, or a writable /dev (nvme-cli opens the device
+        # read-only). Writes are tmp+mv so the agent never reads a torn file; on a node without
+        # an NVMe drive (pinode03 boots from SD) the dumps are removed, so stale data cannot
+        # outlive a pulled drive either, and the agent simply reports no SMART fields.
+        - name: nvme-smart
+          image: ghcr.io/lukislp/piwatch:1.40.21 # set by the deploy-bump job (CI) on every release
+          command:
+            - sh
+            - -c
+            - |
+              dev=/host/dev/nvme0
+              while true; do
+                if [ -e "$dev" ] && nvme smart-log "$dev" -o json > /shared/nvme-smart-log.json.tmp 2>/dev/null; then
+                  mv /shared/nvme-smart-log.json.tmp /shared/nvme-smart-log.json
+                  nvme id-ctrl "$dev" -o json > /shared/nvme-id-ctrl.json.tmp 2>/dev/null && mv /shared/nvme-id-ctrl.json.tmp /shared/nvme-id-ctrl.json
+                else
+                  rm -f /shared/nvme-smart-log.json /shared/nvme-id-ctrl.json /shared/nvme-smart-log.json.tmp /shared/nvme-id-ctrl.json.tmp
+                fi
+                sleep 60
+              done
+          securityContext:
+            privileged: true
+            # capabilities of a privileged container are only effective for UID 0
+            runAsUser: 0
+            # required to be true (or unset) once privileged is true - the API server rejects
+            # privileged:true with allowPrivilegeEscalation:false as invalid (confirmed live).
+            allowPrivilegeEscalation: true
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - {name: dev, mountPath: /host/dev, readOnly: true}
+            - {name: nvme-dumps, mountPath: /shared}
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}
       volumes:
         - {name: sys, hostPath: {path: /sys}}
         - {name: proc, hostPath: {path: /proc}}
         - {name: root, hostPath: {path: /}}
         - {name: dev, hostPath: {path: /dev}}
+        - {name: nvme-dumps, emptyDir: {sizeLimit: 1Mi}}
+        - {name: tmp, emptyDir: {sizeLimit: 8Mi}}

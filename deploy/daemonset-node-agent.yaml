@@ -36,7 +36,7 @@ spec:
           operator: Exists
       containers:
         - name: agent
-          image: ghcr.io/lukislp/piwatch:1.40.21 # set by the deploy-bump job (CI) on every release
+          image: ghcr.io/lukislp/piwatch:1.40.22 # set by the deploy-bump job (CI) on every release
           command: ["uvicorn", "app.node_agent:app", "--host", "0.0.0.0", "--port", "9101"]
           # Unprivileged since 2026-09-29: everything this container reads is read-only sysfs/
           # procfs plus the two JSON dumps the nvme-smart sidecar below leaves in /shared. It

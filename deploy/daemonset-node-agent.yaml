@@ -36,7 +36,7 @@ spec:
           operator: Exists
       containers:
         - name: agent
-          image: ghcr.io/lukislp/piwatch:1.40.26 # set by the deploy-bump job (CI) on every release
+          image: ghcr.io/lukislp/piwatch:1.40.27 # set by the deploy-bump job (CI) on every release
           command: ["uvicorn", "app.node_agent:app", "--host", "0.0.0.0", "--port", "9101"]
           # Unprivileged since 2026-09-29: everything this container reads is read-only sysfs/
           # procfs plus the two JSON dumps the nvme-smart sidecar below leaves in /shared. It
@@ -96,7 +96,7 @@ spec:
         # an NVMe drive (pinode03 boots from SD) the dumps are removed, so stale data cannot
         # outlive a pulled drive either, and the agent simply reports no SMART fields.
         - name: nvme-smart
-          image: ghcr.io/lukislp/piwatch:1.40.26 # set by the deploy-bump job (CI) on every release
+          image: ghcr.io/lukislp/piwatch:1.40.27 # set by the deploy-bump job (CI) on every release
           command:
             - sh
             - -c

@@ -1,6 +1,6 @@
 # Human-edited direct dependencies of the backend. requirements.txt is generated from this
 # file with hashes (see the header there) - edit here, then regenerate, never edit the lock.
-fastapi>=0.141.1
+fastapi>=0.142.2
 uvicorn[standard]>=0.54.0
 kubernetes_asyncio>=36.1.0
 httpx>=0.28.1

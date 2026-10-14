@@ -52,7 +52,7 @@ def _parse_iso(ts: str | None) -> float | None:
     if not ts:
         return None
     try:
-        return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+        return datetime.fromisoformat(ts).timestamp()
     except ValueError:
         return None
 

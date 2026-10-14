@@ -44,7 +44,7 @@ async def ws_state(websocket: WebSocket, token: str | None = Query(default=None)
             try:
                 msg = await asyncio.wait_for(q.get(), timeout=HEARTBEAT_S)
                 await websocket.send_text(json.dumps(msg))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Heartbeat keeps proxies (Traefik) from closing idle streams
                 await websocket.send_text(json.dumps({"type": "ping"}))
     except (WebSocketDisconnect, RuntimeError):

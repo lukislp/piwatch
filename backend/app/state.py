@@ -11,7 +11,7 @@ import csv
 import io
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 # ~3h of history at one sample every 10s
@@ -34,7 +34,7 @@ def now() -> float:
 
 
 def _iso(t: float) -> str:
-    return datetime.fromtimestamp(t, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(t, tz=UTC).isoformat()
 
 
 class ClusterState:

@@ -19,7 +19,7 @@ import ssl
 import sys
 import time
 import types
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import ClassVar
 
 import pytest
@@ -53,7 +53,7 @@ def _node_obj(name="pi-1", role_label=True, with_optional=True, unschedulable=Fa
     metadata = types.SimpleNamespace(
         name=name,
         labels=labels,
-        creation_timestamp=datetime.now(timezone.utc) if with_optional else None,
+        creation_timestamp=datetime.now(UTC) if with_optional else None,
     )
     spec = types.SimpleNamespace(unschedulable=unschedulable, taints=taints)
     return types.SimpleNamespace(status=status, metadata=metadata, spec=spec)
@@ -99,7 +99,7 @@ def _pod_obj(
             )
         ]
     metadata = types.SimpleNamespace(
-        name=name, namespace=namespace, creation_timestamp=datetime.now(timezone.utc)
+        name=name, namespace=namespace, creation_timestamp=datetime.now(UTC)
     )
     spec = types.SimpleNamespace(
         node_name="pi-1", containers=[types.SimpleNamespace(name="app", image="registry.local/app:v1")]
@@ -196,14 +196,14 @@ def _networkpolicy_obj(
 
 
 def _secret_obj(name="sec1", namespace="default", secret_type="Opaque", data=None, immutable=False):
-    metadata = types.SimpleNamespace(name=name, namespace=namespace, creation_timestamp=datetime.now(timezone.utc))
+    metadata = types.SimpleNamespace(name=name, namespace=namespace, creation_timestamp=datetime.now(UTC))
     return types.SimpleNamespace(
         metadata=metadata, type=secret_type, data=data if data is not None else {"a": "Yg=="}, immutable=immutable,
     )
 
 
 def _configmap_obj(name="cm1", namespace="default", data=None, binary_data=None, immutable=False):
-    metadata = types.SimpleNamespace(name=name, namespace=namespace, creation_timestamp=datetime.now(timezone.utc))
+    metadata = types.SimpleNamespace(name=name, namespace=namespace, creation_timestamp=datetime.now(UTC))
     return types.SimpleNamespace(
         metadata=metadata,
         data=data if data is not None else {"key.yaml": "a: 1"},
@@ -237,7 +237,7 @@ def _event_obj(uid="evt-1"):
     involved = types.SimpleNamespace(kind="Pod", name="p1", namespace="default")
     return types.SimpleNamespace(
         metadata=metadata,
-        last_timestamp=datetime.now(timezone.utc),
+        last_timestamp=datetime.now(UTC),
         event_time=None,
         type="Normal",
         reason="Scheduled",
@@ -1260,7 +1260,7 @@ def test_map_kustomization_computes_next_reconcile_from_history_and_interval():
     )
     import datetime
 
-    expected = datetime.datetime(2026, 1, 1, 0, 5, 0, tzinfo=datetime.timezone.utc).timestamp()
+    expected = datetime.datetime(2026, 1, 1, 0, 5, 0, tzinfo=datetime.UTC).timestamp()
     assert d["next_reconcile_t"] == pytest.approx(expected)
 
 
@@ -1272,7 +1272,7 @@ def test_map_kustomization_falls_back_to_ready_transition_time_without_history()
     d = _map_kustomization(_kustomization_obj(interval="1m"))
     import datetime
 
-    expected = datetime.datetime(2026, 1, 1, 0, 1, 0, tzinfo=datetime.timezone.utc).timestamp()
+    expected = datetime.datetime(2026, 1, 1, 0, 1, 0, tzinfo=datetime.UTC).timestamp()
     assert d["next_reconcile_t"] == pytest.approx(expected)
 
 

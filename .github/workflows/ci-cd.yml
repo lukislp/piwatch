@@ -370,7 +370,7 @@ jobs:
           fi
           git diff --stat
       - name: Sign and push the image tag bump
-        uses: lukislp/ci-workflows/.github/actions/signed-bot-commit@bcb2de45ddf2d2dfc73b206998344af75b0a30b3 # v1.8.13
+        uses: lukislp/ci-workflows/.github/actions/signed-bot-commit@fc2d6420d00d465bbac8b3422ea29322ba2f2bc4 # v1.8.16
         with:
           signing-key: ${{ secrets.DEPLOY_SIGNING_KEY }}
           committer-name: "piwatch-deploy"

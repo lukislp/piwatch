@@ -18,3 +18,11 @@ modules:
     branch: master
     first-version: "1.0.0"  # only used while no tag matches tag-format
     rules: []               # the former semantic-release setup had no custom rules
+
+  # Commits the image tag bump of the deploy manifests onto the default branch after a release (see
+  # docs/modules/sync.md in lukislp/lktec-bot). The App is a bypass actor of the branch ruleset for it.
+  sync:
+    enabled: true
+    paths: [deploy]
+    branch: master
+    commit-message: "chore(deploy): image {version} [skip ci]"

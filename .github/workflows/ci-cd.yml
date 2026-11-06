@@ -150,7 +150,7 @@ jobs:
     concurrency:
       group: piwatch-release-chain
       cancel-in-progress: false
-    uses: lukislp/lktec-bot/.github/workflows/release.yml@ba6a835404962f464956ae8d4d05309e97b882c2 # v0.1.2
+    uses: lukislp/lktec-bot/.github/workflows/release.yml@38079b17498fcfda986f427fd6258bd32185e7c3 # v0.2.0
     with:
       dry-run: true
     secrets:
@@ -365,7 +365,7 @@ jobs:
     concurrency:
       group: piwatch-release-chain
       cancel-in-progress: false
-    uses: lukislp/lktec-bot/.github/workflows/release.yml@ba6a835404962f464956ae8d4d05309e97b882c2 # v0.1.2
+    uses: lukislp/lktec-bot/.github/workflows/release.yml@38079b17498fcfda986f427fd6258bd32185e7c3 # v0.2.0
     secrets:
       app-id: ${{ secrets.LKTEC_BOT_APP_ID }}
       private-key: ${{ secrets.LKTEC_BOT_PRIVATE_KEY }}

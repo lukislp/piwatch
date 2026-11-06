@@ -9,3 +9,12 @@ modules:
     workflow-files: auto
     method: squash
     exclude: []
+  # Tags and publishes a release from the Conventional Commits on the default branch (see
+  # docs/modules/release.md in lukislp/lktec-bot).
+  release:
+    enabled: true
+    mode: tag
+    tag-format: "v{version}"
+    branch: master
+    first-version: "1.0.0"  # only used while no tag matches tag-format
+    rules: []               # the former semantic-release setup had no custom rules

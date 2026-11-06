@@ -26,7 +26,7 @@ small - but it is the same for every change, including the maintainer's own.
 - **Tests for new functionality.** New features and bug fixes come with tests in `backend/tests/`
   (or `ml/tests/` for the standalone `ml/` project). A PR that adds behaviour without a test is
   asked to add one. The coverage badge in the README is generated from the backend coverage
-  report and uploaded to each release as an asset; it is expected not to drop.
+  report and committed by the lktec-bot App together with the image bump; it is expected not to drop.
 - **Lint.** `ruff check .` runs in `backend/` as part of `test-backend`; run it before pushing.
   `backend/pyproject.toml` configures it - the collectors and pollers intentionally catch broadly,
   so `BLE001` and `S110` are ignored there rather than worked around per call site.

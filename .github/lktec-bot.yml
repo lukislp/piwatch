@@ -1,0 +1,11 @@
+# Policy of lktec-bot for this repository (https://github.com/lukislp/lktec-bot,
+# docs/modules/automerge.md). Read from the default branch only, never from a pull request.
+version: 1
+modules:
+  automerge:
+    enabled: true
+    # patch, minor and digest updates are armed; a major is left to a person.
+    majors: manual
+    workflow-files: auto
+    method: squash
+    exclude: []

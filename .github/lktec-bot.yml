@@ -26,3 +26,5 @@ modules:
     paths: [deploy, .github/badges]
     branch: master
     commit-message: "chore(deploy): image {version} [skip ci]"
+    # Reports the bump as a check run "lktec-bot / deploy bump" on the release commit (needs v0.7.0+).
+    check: true

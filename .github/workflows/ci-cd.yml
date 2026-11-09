@@ -310,6 +310,51 @@ jobs:
             "${{ env.IMAGE }}@${DIGEST}" --output text >/dev/null
           echo "signed and verified ${{ env.IMAGE }}@${DIGEST}" | tee -a "$GITHUB_STEP_SUMMARY"
 
+  # Signed files on the GitHub release. The image itself is signed in GHCR (job above); this
+  # puts its SBOM and digest on the release with a Sigstore keyless bundle, so the release
+  # page can be verified without a registry and OpenSSF Scorecard's Signed-Releases check,
+  # which only looks at release assets, sees the signatures.
+  release-assets:
+    needs: [release, docker-manifest-merge]
+    if: github.event_name == 'push' && needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: read
+      id-token: write
+    env:
+      NEXT_VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - name: Export the SBOM and the digest of the released image
+        run: |
+          set -euo pipefail
+          ref="${{ env.IMAGE }}:${{ env.NEXT_VERSION }}"
+          digest="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+          echo "${{ env.IMAGE }}@${digest}" > piwatch-image.txt
+          docker buildx imagetools inspect "$ref" --format '{{ json (index .SBOM "linux/amd64").SPDX }}' > piwatch-sbom.spdx.json
+          test -s piwatch-sbom.spdx.json
+      - name: Sign the files (Sigstore keyless)
+        run: |
+          set -euo pipefail
+          for file in piwatch-image.txt piwatch-sbom.spdx.json; do
+            cosign sign-blob --yes --bundle "${file}.sigstore.json" "$file"
+          done
+      - name: Upload them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "v${{ env.NEXT_VERSION }}" --repo "${{ github.repository }}" --clobber \
+            piwatch-image.txt piwatch-image.txt.sigstore.json \
+            piwatch-sbom.spdx.json piwatch-sbom.spdx.json.sigstore.json
+
   # The image tag bump of the deploy manifests, committed onto the default branch by the lktec-bot App
   # (module sync: docs/modules/sync.md in lukislp/lktec-bot; the App is a bypass actor of the branch ruleset
   # for this one commit, which GitHub signs itself). Flux picks the new tag up from the branch.

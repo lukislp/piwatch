@@ -1,7 +1,7 @@
 # Human-edited direct dependencies of the ml/ project. requirements.txt is generated from this
 # file with hashes (see the header there) - edit here, then regenerate, never edit the lock.
 pandas>=3.1.1
-pyarrow>=25.0.1
+pyarrow>=26.0.1
 matplotlib>=3.8
 scikit-learn>=1.9.0
 torch>=2.14.1

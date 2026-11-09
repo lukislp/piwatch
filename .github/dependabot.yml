@@ -1,5 +1,12 @@
 # Weekly Dependabot updates: GitHub Actions, the frontend (dev deps grouped), backend + ml requirements and the Dockerfile.
 version: 2
+# ml/requirements.txt takes torch from the PyTorch CPU index (2.x+cpu, no CUDA libraries);
+# Dependabot needs the index to see and update that build.
+registries:
+  pytorch-cpu:
+    type: python-index
+    url: https://download.pytorch.org/whl/cpu
+    replaces-base: false
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -43,6 +50,8 @@ updates:
     directories:
       - /backend
       - /ml
+    registries:
+      - pytorch-cpu
     schedule:
       interval: daily
     # The OpenTelemetry packages pin each other exactly (opentelemetry-sdk 1.x needs

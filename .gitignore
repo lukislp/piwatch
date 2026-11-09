@@ -16,6 +16,7 @@ ml/data/parquet/
 ml/exploration/figures/
 ml/model/checkpoints/
 ml/mlruns/
+ml/.venv/
 
 # libFuzzer artifacts written by backend/fuzz/ harness runs
 backend/crash-*

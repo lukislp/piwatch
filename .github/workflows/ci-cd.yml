@@ -90,10 +90,11 @@ jobs:
       - run: pip install --require-hashes -r backend/requirements-dev.txt
       - run: pip-audit -r backend/requirements.txt
 
-  # ml/ is a separate, standalone Python project (its own requirements.txt, no shared
+  # ml/ is a separate, standalone uv project (ml/pyproject.toml + ml/uv.lock, no shared
   # dependency with backend/) - not wired into docker-build-push (no image ships it), which is
-  # why it previously had no CI coverage at all: a green Dependabot PR against
-  # ml/requirements.txt was proving nothing (2026-09-05).
+  # why it previously had no CI coverage at all: a green Dependabot PR against its lock was
+  # proving nothing (2026-09-05). `uv sync --locked` fails if the lock is stale and checks
+  # every hash in it.
   test-ml:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -102,10 +103,13 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: ml/requirements*.txt
-      - run: pip install --require-hashes -r ml/requirements.txt -r ml/requirements-dev.txt
-      - run: python -m pytest ml/tests/
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.12.24"
+          enable-cache: true
+          cache-dependency-glob: ml/uv.lock
+      - run: uv sync --locked --project ml --python "${{ env.PYTHON_VERSION }}"
+      - run: uv run --locked --no-sync --project ml python -m pytest ml/tests/
 
   # Coverage-guided fuzzing of the pure parsers (backend/fuzz/): a short fixed budget per run,
   # enough to catch a crash on the next code change, cheap enough to run on every push.

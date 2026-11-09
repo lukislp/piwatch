@@ -40,18 +40,36 @@ updates:
       - "lukislp"
     open-pull-requests-limit: 5
   - package-ecosystem: pip
-    directories:
-      - /backend
-      - /ml
-    # ml/requirements.in names the PyTorch CPU index itself (--extra-index-url), so pip-compile
-    # finds torch 2.x+cpu without a Dependabot registry. A configured registry would make
-    # Dependabot deny external code execution and refuse to run pip-compile at all.
+    directory: /backend
     schedule:
       interval: daily
     # The OpenTelemetry packages pin each other exactly (opentelemetry-sdk 1.x needs
     # opentelemetry-api == 1.x), so a lone bump of one cannot resolve. A security update of
     # opentelemetry-api alone failed silently for that reason and ml/ stayed vulnerable.
     # Group them so version and security updates move all of them in one pull request.
+    groups:
+      opentelemetry:
+        applies-to: version-updates
+        patterns:
+          - "opentelemetry-*"
+      opentelemetry-security:
+        applies-to: security-updates
+        patterns:
+          - "opentelemetry-*"
+    commit-message:
+      prefix: "fix(deps)"
+    reviewers:
+      - "lukislp"
+    open-pull-requests-limit: 5
+  # ml/ is a uv project. Its torch comes from the PyTorch CPU index named in ml/pyproject.toml
+  # ([[tool.uv.index]], public, no credentials - so no Dependabot registry is configured, which
+  # would make Dependabot deny external code execution). Dependabot updates uv.lock by running uv,
+  # which takes the hashes from that index; the pip updater could not (it fetched hashes through
+  # PyPI's JSON API, where torch +cpu builds do not exist).
+  - package-ecosystem: uv
+    directory: /ml
+    schedule:
+      interval: daily
     groups:
       opentelemetry:
         applies-to: version-updates

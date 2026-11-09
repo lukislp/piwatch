@@ -30,8 +30,10 @@ small - but it is the same for every change, including the maintainer's own.
 - **Lint.** `ruff check .` runs in `backend/` as part of `test-backend`; run it before pushing.
   `backend/pyproject.toml` configures it - the collectors and pollers intentionally catch broadly,
   so `BLE001` and `S110` are ignored there rather than worked around per call site.
-- **Pinned dependencies.** `backend/requirements*.txt` and `ml/requirements*.txt` are installed
-  with `--require-hashes`, so a new or bumped dependency needs its hashes in the file. `pip-audit`
+- **Pinned dependencies.** `backend/requirements*.txt` are installed with `--require-hashes`, so
+  a new or bumped dependency needs its hashes in the file. `ml/` is a uv project: edit
+  `ml/pyproject.toml`, run `uv lock` in `ml/`, and commit `ml/uv.lock` (CI runs
+  `uv sync --locked`, which fails on a stale lock and checks every hash). `pip-audit`
   (`test-security`) and `npm audit --omit=dev` (`test-frontend`) must stay clean for what is
   actually shipped.
 - **Deployment manifests.** Changes under `deploy/` are validated with `kubeconform`
@@ -54,7 +56,7 @@ Tests and lint, the same commands CI runs:
 ```bash
 cd backend && python -m pytest tests/
 cd backend && ruff check .
-python -m pytest ml/tests/
+uv sync --project ml && uv run --project ml python -m pytest ml/tests/
 cd frontend && npm ci && npm run build
 ```
 

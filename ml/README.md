@@ -35,7 +35,9 @@ Requires `kubectl` on PATH and `KUBECONFIG` pointing at the target cluster (no
 credentials are stored here -- point it at whatever cluster you want to pull from).
 
 ```bash
-pip install -r ml/requirements.txt
+# ml/ is a uv project: this creates ml/.venv from ml/uv.lock (hash-checked, torch CPU build)
+uv sync --project ml
+source ml/.venv/bin/activate
 
 # Pull a fresh snapshot from every piwatch pod (run this periodically -- each run
 # adds a new timestamped dump under ml/data/raw/, nothing is overwritten)

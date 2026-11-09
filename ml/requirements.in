@@ -1,10 +1,12 @@
 # Human-edited direct dependencies of the ml/ project. requirements.txt is generated from this
 # file with hashes (see the header there) - edit here, then regenerate, never edit the lock.
+# torch comes from the PyTorch CPU index (2.x+cpu, no CUDA libraries). The index is named here so
+# every compile - by hand or by Dependabot - resolves the same build.
+--extra-index-url https://download.pytorch.org/whl/cpu
 pandas>=3.1.1
 pyarrow>=26.0.1
 matplotlib>=3.8
 scikit-learn>=1.9.0
-# CPU-only build from the PyTorch index (see the header of requirements.txt for the command).
 torch>=2.14.1
 mlflow>=3.18.0
 httpx>=0.28.1

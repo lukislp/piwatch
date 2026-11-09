@@ -1,12 +1,5 @@
 # Weekly Dependabot updates: GitHub Actions, the frontend (dev deps grouped), backend + ml requirements and the Dockerfile.
 version: 2
-# ml/requirements.txt takes torch from the PyTorch CPU index (2.x+cpu, no CUDA libraries);
-# Dependabot needs the index to see and update that build.
-registries:
-  pytorch-cpu:
-    type: python-index
-    url: https://download.pytorch.org/whl/cpu
-    replaces-base: false
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -50,8 +43,9 @@ updates:
     directories:
       - /backend
       - /ml
-    registries:
-      - pytorch-cpu
+    # ml/requirements.in names the PyTorch CPU index itself (--extra-index-url), so pip-compile
+    # finds torch 2.x+cpu without a Dependabot registry. A configured registry would make
+    # Dependabot deny external code execution and refuse to run pip-compile at all.
     schedule:
       interval: daily
     # The OpenTelemetry packages pin each other exactly (opentelemetry-sdk 1.x needs

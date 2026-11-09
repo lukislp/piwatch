@@ -46,6 +46,12 @@ updates:
     # ml/requirements.in names the PyTorch CPU index itself (--extra-index-url), so pip-compile
     # finds torch 2.x+cpu without a Dependabot registry. A configured registry would make
     # Dependabot deny external code execution and refuse to run pip-compile at all.
+    # torch itself is ignored: pip-compile resolves the next 2.x+cpu correctly, but Dependabot then
+    # fetches the hashes through PyPI's JSON API (hashin), where +cpu builds do not exist and which
+    # the PyTorch index does not offer - every torch update failed and broke the whole pip run.
+    # Update torch by hand with the uv command in the header of ml/requirements.txt.
+    ignore:
+      - dependency-name: "torch"
     schedule:
       interval: daily
     # The OpenTelemetry packages pin each other exactly (opentelemetry-sdk 1.x needs

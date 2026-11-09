@@ -45,6 +45,19 @@ updates:
       - /ml
     schedule:
       interval: daily
+    # The OpenTelemetry packages pin each other exactly (opentelemetry-sdk 1.x needs
+    # opentelemetry-api == 1.x), so a lone bump of one cannot resolve. A security update of
+    # opentelemetry-api alone failed silently for that reason and ml/ stayed vulnerable.
+    # Group them so version and security updates move all of them in one pull request.
+    groups:
+      opentelemetry:
+        applies-to: version-updates
+        patterns:
+          - "opentelemetry-*"
+      opentelemetry-security:
+        applies-to: security-updates
+        patterns:
+          - "opentelemetry-*"
     commit-message:
       prefix: "fix(deps)"
     reviewers:

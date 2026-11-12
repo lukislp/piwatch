@@ -3282,6 +3282,29 @@ def test_readyz_true_in_demo_mode(monkeypatch, tmp_path):
         assert r.json() == {"ready": True}
 
 
+def test_readyz_reports_history_write_failures_without_failing_readiness(monkeypatch, tmp_path):
+    from app.collectors import history
+
+    nostatic = tmp_path / "nostatic"
+    main_mod = _reload_main(
+        monkeypatch,
+        PIWATCH_DEMO="1",
+        PIWATCH_STATIC_DIR=str(nostatic),
+        PIWATCH_HISTORY_DB=str(tmp_path / "h.db"),
+    )
+    from fastapi.testclient import TestClient
+
+    failing = history.WriteStatus()
+    failing.record_failure(RuntimeError("no such column"))
+    monkeypatch.setattr(history, "write_status", failing)
+    with TestClient(main_mod.app) as client:
+        r = client.get("/readyz")
+        assert r.status_code == 200  # a broken history store never takes a pod out of service
+        assert r.json()["history"] == {
+            "ok": False, "failed_writes": 1, "last_error": "no such column",
+        }
+
+
 def test_spa_serves_existing_file_directly(monkeypatch, tmp_path):
     """A real file at the STATIC_DIR root (outside /assets) is served as-is
     via FileResponse(candidate), not the index.html fallback."""

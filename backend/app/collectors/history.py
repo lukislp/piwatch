@@ -37,7 +37,74 @@ log = logging.getLogger("piwatch.history")
 PRUNE_INTERVAL = 3600  # seconds between retention sweeps
 DEFAULT_RETENTION_DAYS = 7
 
+ERROR_LOG_INTERVAL = 300  # seconds between repeated "write failed" errors during an outage
+
 _COLUMNS = ("t", *NODE_HISTORY_FIELDS)
+
+
+# ---------------------------------------------------------------------------------------
+# Schema migrations
+#
+# The database is a plain SQLite file that outlives every deploy (hostPath), so the schema
+# has to evolve in place: a column added to NODE_HISTORY_FIELDS does NOT appear in a table
+# that already exists. (Adding the sd_* fields without a migration made every insert fail
+# from 2026-09-05 on.) Migrations are an ordered, append-only list applied by _migrate();
+# the applied count is stored in SQLite's `PRAGMA user_version`.
+#
+# Rules: never edit or reorder an entry, only append. Each step is written out literally --
+# not derived from NODE_HISTORY_FIELDS -- so a new field without a new step is caught by
+# test_history_schema_matches_node_history_fields. Each step is also idempotent, because
+# databases created before versioning existed carry user_version 0 but already hold some
+# (or all) of these tables and columns.
+# ---------------------------------------------------------------------------------------
+
+
+def _columns(conn: sqlite3.Connection) -> set[str]:
+    return {row[1] for row in conn.execute("PRAGMA table_info(node_samples)")}
+
+
+def _add_columns(conn: sqlite3.Connection, names: tuple[str, ...]) -> None:
+    present = _columns(conn)
+    for name in names:
+        if name not in present:
+            conn.execute(f"ALTER TABLE node_samples ADD COLUMN {name} REAL")
+
+
+def _m1_create_node_samples(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS node_samples (node TEXT NOT NULL, t REAL, "
+        "cpu_pct REAL, mem_pct REAL, temp_c REAL, "
+        "nvme_read_bytes_per_s REAL, nvme_write_bytes_per_s REAL, "
+        "net_rx_bytes_per_s REAL, net_tx_bytes_per_s REAL)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_node_samples_node_t ON node_samples(node, t)")
+
+
+def _m2_add_sd_throughput(conn: sqlite3.Connection) -> None:
+    _add_columns(conn, ("sd_read_bytes_per_s", "sd_write_bytes_per_s"))
+
+
+MIGRATIONS = (_m1_create_node_samples, _m2_add_sd_throughput)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Applies every migration newer than the file's user_version, each in its own
+    transaction. Safe to call on every start: a current database is a no-op."""
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if version > len(MIGRATIONS):
+        raise RuntimeError(
+            f"history DB schema version {version} is newer than this build supports "
+            f"({len(MIGRATIONS)}) -- refusing to use it"
+        )
+    for target, step in enumerate(MIGRATIONS[version:], start=version + 1):
+        conn.execute("BEGIN")
+        try:
+            step(conn)
+            conn.execute(f"PRAGMA user_version = {target}")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
 
 
 def _enabled() -> bool:
@@ -55,14 +122,14 @@ def _connect(path: str) -> sqlite3.Connection:
     # can land on a different worker thread each call. Safe here because this connection is
     # only ever driven by run()'s single-consumer loop -- one await at a time, never two
     # threads touching it concurrently.
-    conn = sqlite3.connect(path, check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute(
-        f"CREATE TABLE IF NOT EXISTS node_samples "
-        f"(node TEXT NOT NULL, {', '.join(f'{c} REAL' for c in _COLUMNS)})"
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_node_samples_node_t ON node_samples(node, t)")
-    conn.commit()
+    # isolation_level=None: autocommit, so _migrate() controls its own transactions.
+    conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        _migrate(conn)
+    except BaseException:
+        conn.close()
+        raise
     return conn
 
 
@@ -72,14 +139,59 @@ def _insert(conn: sqlite3.Connection, node: str, entry: dict) -> None:
         f"INSERT INTO node_samples (node, {', '.join(_COLUMNS)}) VALUES ({placeholders})",
         (node, *(entry.get(c) for c in _COLUMNS)),
     )
-    conn.commit()
 
 
 def prune(conn: sqlite3.Connection, retention_seconds: float) -> int:
     """Deletes rows older than the retention window; returns how many were removed."""
     cursor = conn.execute("DELETE FROM node_samples WHERE t < ?", (time.time() - retention_seconds,))
-    conn.commit()
     return cursor.rowcount
+
+
+class WriteStatus:
+    """Outcome of the persistence loop, surfaced on /readyz so a broken history store is
+    visible without reading pod logs. Informational only: a history failure must never
+    make a pod unready, the live dashboard works fine without it."""
+
+    def __init__(self) -> None:
+        self.failed_writes = 0
+        self.last_error: str | None = None
+        self._last_logged = 0.0
+
+    @property
+    def healthy(self) -> bool:
+        return self.last_error is None
+
+    def record_failure(self, exc: Exception) -> None:
+        self.failed_writes += 1
+        self.last_error = str(exc)
+        # One sample every few seconds per node: log the first failure and then a summary
+        # every ERROR_LOG_INTERVAL, instead of flooding the log during an outage.
+        if self.failed_writes == 1 or time.time() - self._last_logged >= ERROR_LOG_INTERVAL:
+            self._last_logged = time.time()
+            log.error(
+                "History write failed (%s) -- sample dropped (%d dropped so far)",
+                exc, self.failed_writes,
+            )
+
+    def record_success(self) -> None:
+        if self.last_error is not None:
+            log.info("History writes recovered after %d dropped samples", self.failed_writes)
+            self.last_error = None
+            self._last_logged = 0.0
+
+
+write_status = WriteStatus()
+
+
+def status() -> dict | None:
+    """None when persistence is off, otherwise the write health for /readyz."""
+    if not _enabled():
+        return None
+    return {
+        "ok": write_status.healthy,
+        "failed_writes": write_status.failed_writes,
+        "last_error": write_status.last_error,
+    }
 
 
 def load_startup_history(state: ClusterState) -> None:
@@ -106,7 +218,8 @@ def load_startup_history(state: ClusterState) -> None:
         finally:
             conn.close()
     except Exception as exc:
-        log.warning("Could not reload persisted history from %s (%s) -- starting empty", path, exc)
+        log.error("Could not reload persisted history from %s (%s) -- starting empty", path, exc)
+        write_status.record_failure(exc)
 
 
 async def run(state: ClusterState) -> None:
@@ -116,7 +229,8 @@ async def run(state: ClusterState) -> None:
     try:
         conn = _connect(path)
     except Exception as exc:
-        log.warning("Could not open history DB at %s (%s) -- persistence disabled", path, exc)
+        log.error("Could not open history DB at %s (%s) -- persistence disabled", path, exc)
+        write_status.record_failure(exc)
         return
 
     retention = _retention_seconds()
@@ -132,8 +246,9 @@ async def run(state: ClusterState) -> None:
                 d = msg["data"]
                 try:
                     await asyncio.to_thread(_insert, conn, d["node"], d)
+                    write_status.record_success()
                 except Exception as exc:
-                    log.warning("History write failed (%s) -- sample dropped", exc)
+                    write_status.record_failure(exc)
             if time.time() - last_prune > PRUNE_INTERVAL:
                 await asyncio.to_thread(prune, conn, retention)
                 last_prune = time.time()

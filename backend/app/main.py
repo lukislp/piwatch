@@ -129,7 +129,12 @@ def healthz():
 def readyz():
     """Readiness: collectors have produced at least one node."""
     ready = bool(state.nodes) or state.demo_mode
-    return JSONResponse({"ready": ready}, status_code=200 if ready else 503)
+    body: dict = {"ready": ready}
+    # Informational only (never affects the status code): present when PIWATCH_HISTORY_DB
+    # is set, so a failing history store shows up here instead of only in the pod logs.
+    if (hist := history.status()) is not None:
+        body["history"] = hist
+    return JSONResponse(body, status_code=200 if ready else 503)
 
 
 # ---------------- static frontend ----------------

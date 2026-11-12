@@ -65,7 +65,11 @@ cluster involved.
   a pod restart instead of starting empty, backed by a local SQLite file. Bounded, not
   unlimited -- rows older than `PIWATCH_HISTORY_RETENTION_DAYS` (default 7) are pruned
   periodically. Storage is node-local (hostPath), one file per replica, not a shared PVC --
-  see the comment in `deploy/deployment.yaml` for why
+  see the comment in `deploy/deployment.yaml` for why. The schema is versioned
+  (`PRAGMA user_version`) and upgraded in place on start by the append-only migration list in
+  `backend/app/collectors/history.py`; adding a field to `NODE_HISTORY_FIELDS` requires a new
+  migration, which a test enforces. A failing write is logged as an error and reported under
+  `history` in the `/readyz` body (informational, readiness stays 200)
 - **Cluster capacity overview**: two Overview tiles showing total CPU cores and RAM used
   vs. allocatable across all nodes, so you can see headroom before a pod fails to schedule
 - **Network throughput** per node (RX/TX), summed across physical interfaces only

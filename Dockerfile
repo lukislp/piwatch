@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---------- Stage 2: Backend runtime (arm64 + amd64 compatible) ----------
-FROM python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
+FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 
 # Pull in Debian's security updates on every build: the digest-pinned base image lags behind
 # the security archive (fixed CRITICAL CVEs in the base layer blocked the Trivy gate on

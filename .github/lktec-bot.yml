@@ -12,6 +12,9 @@ modules:
     # lktec-bot v0.9.0): only that case, bound to the approved head, never an admin merge.
     merge-ready: true
     exclude: []
+    # Renovate pull requests (renovate[bot], renovate/ branches) are treated like Dependabot
+    # ones: minor, patch and digest updates are armed.
+    renovate: true
   # Tags and publishes a release from the Conventional Commits on the default branch (see
   # docs/modules/release.md in lukislp/lktec-bot).
   release:

@@ -385,7 +385,7 @@ jobs:
     concurrency:
       group: piwatch-release-chain
       cancel-in-progress: false
-    uses: lukislp/lktec-bot/.github/workflows/deploy-bump.yml@0ef1f3c75c6679a9e7fe482fc9099fe607a393f1 # v0.12.2
+    uses: lukislp/lktec-bot/.github/workflows/deploy-bump.yml@fdeb70dedce46ff4ac74a465d89ea1e8c4a8ba1e # v0.13.0
     with:
       version: ${{ needs.release.outputs.version }}
       images: 'ghcr\.io/lukislp/(piwatch)'
